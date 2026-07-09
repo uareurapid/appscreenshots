@@ -1996,6 +1996,104 @@ async function deleteProject() {
     updateProjectSelector();
 }
 
+// Export current project as a .json file download
+async function exportProject() {
+    if (!db) {
+        await showAppAlert('Database not available', 'error');
+        return;
+    }
+
+    return new Promise((resolve) => {
+        const transaction = db.transaction([PROJECTS_STORE], 'readonly');
+        const store = transaction.objectStore(PROJECTS_STORE);
+        const request = store.get(currentProjectId);
+
+        request.onsuccess = async () => {
+            const projectData = request.result;
+            if (!projectData) {
+                showAppAlert('Could not read project data', 'error').then(resolve);
+                return;
+            }
+
+            const project = projects.find(p => p.id === currentProjectId);
+            const exportPayload = {
+                exportVersion: 1,
+                exportedAt: new Date().toISOString(),
+                projectMeta: { name: project ? project.name : 'Project', screenshotCount: project ? project.screenshotCount : 0 },
+                projectData
+            };
+
+            const json = JSON.stringify(exportPayload);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const safeName = (project ? project.name : 'project').replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+            a.href = url;
+            a.download = `${safeName}_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            resolve();
+        };
+
+        request.onerror = async () => {
+            await showAppAlert('Failed to export project', 'error');
+            resolve();
+        };
+    });
+}
+
+// Import a project from a .json file
+async function importProject(file) {
+    if (!db) {
+        await showAppAlert('Database not available', 'error');
+        return;
+    }
+
+    let payload;
+    try {
+        const text = await file.text();
+        payload = JSON.parse(text);
+    } catch (e) {
+        await showAppAlert('Invalid project file', 'error');
+        return;
+    }
+
+    if (!payload.projectData || !payload.projectData.screenshots) {
+        await showAppAlert('Unrecognized project file format', 'error');
+        return;
+    }
+
+    const newId = 'project_' + Date.now();
+    const baseName = (payload.projectMeta?.name || file.name.replace(/\.json$/i, ''));
+    // Avoid duplicate names
+    const existingNames = new Set(projects.map(p => p.name));
+    let importedName = baseName;
+    let suffix = 1;
+    while (existingNames.has(importedName)) {
+        importedName = `${baseName} (${++suffix})`;
+    }
+
+    const clonedData = JSON.parse(JSON.stringify(payload.projectData));
+    clonedData.id = newId;
+
+    projects.push({ id: newId, name: importedName, screenshotCount: clonedData.screenshots?.length || 0 });
+    saveProjectsMeta();
+
+    await new Promise((resolve) => {
+        const transaction = db.transaction([PROJECTS_STORE], 'readwrite');
+        const store = transaction.objectStore(PROJECTS_STORE);
+        const req = store.put(clonedData);
+        req.onsuccess = resolve;
+        req.onerror = resolve;
+    });
+
+    await switchProject(newId);
+    updateProjectSelector();
+    await showAppAlert(`Project "${importedName}" imported successfully`, 'success');
+}
+
 async function duplicateProject(sourceProjectId, customName) {
     if (!db) return;
 
@@ -3738,6 +3836,18 @@ function setupEventListeners() {
         document.getElementById('delete-project-message').textContent =
             `Are you sure you want to delete "${project ? project.name : 'this project'}"? This cannot be undone.`;
         document.getElementById('delete-project-modal').classList.add('visible');
+    });
+
+    document.getElementById('export-project-btn').addEventListener('click', () => exportProject());
+
+    document.getElementById('import-project-btn').addEventListener('click', () => {
+        document.getElementById('import-project-input').value = '';
+        document.getElementById('import-project-input').click();
+    });
+
+    document.getElementById('import-project-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) await importProject(file);
     });
 
     // Project modal buttons
