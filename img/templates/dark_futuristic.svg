@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796" viewBox="0 0 1290 2796">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#020202"/><stop offset="40%" stop-color="#050510"/><stop offset="70%" stop-color="#050a12"/><stop offset="100%" stop-color="#00101a"/></linearGradient>
+    <pattern id="grid" width="35" height="35" patternUnits="userSpaceOnUse"><path d="M35 0L0 0 0 35" fill="none" stroke="#00e5ff" stroke-width="0.5" opacity="0.08"/></pattern>
+    <radialGradient id="node" cx="0.5" cy="0.5" r="0.5"><stop offset="0%" stop-color="#00e5ff" stop-opacity="0.25"/><stop offset="40%" stop-color="#00e5ff" stop-opacity="0.1"/><stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="fog" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00101a" stop-opacity="0"/><stop offset="100%" stop-color="#00101a" stop-opacity="0.15"/></linearGradient>
+  </defs>
+  <rect width="1290" height="2796" fill="url(#bg)"/>
+  <rect width="1290" height="2796" fill="url(#grid)"/>
+  <circle cx="210" cy="420" r="45" fill="url(#node)"/><circle cx="560" cy="420" r="35" fill="url(#node)"/><circle cx="910" cy="420" r="50" fill="url(#node)"/>
+  <circle cx="210" cy="980" r="40" fill="url(#node)"/><circle cx="560" cy="980" r="55" fill="url(#node)"/><circle cx="910" cy="980" r="35" fill="url(#node)"/>
+  <circle cx="210" cy="1540" r="45" fill="url(#node)"/><circle cx="560" cy="1540" r="40" fill="url(#node)"/><circle cx="910" cy="1540" r="50" fill="url(#node)"/>
+  <circle cx="210" cy="2100" r="35" fill="url(#node)"/><circle cx="560" cy="2100" r="45" fill="url(#node)"/><circle cx="910" cy="2100" r="40" fill="url(#node)"/>
+  <circle cx="385" cy="700" r="30" fill="url(#node)"/><circle cx="735" cy="1260" r="40" fill="url(#node)"/><circle cx="385" cy="1820" r="35" fill="url(#node)"/>
+  <line x1="60" y1="680" x2="380" y2="680" stroke="#00e5ff" stroke-width="3" opacity="0.15" stroke-linecap="round"/>
+  <line x1="900" y1="2100" x2="1240" y2="2100" stroke="#00e5ff" stroke-width="3" opacity="0.15" stroke-linecap="round"/>
+  <line x1="-500" y1="500" x2="500" y2="2796" stroke="#82b1ff" stroke-width="1.5" opacity="0.04"/><line x1="0" y1="500" x2="1000" y2="2796" stroke="#82b1ff" stroke-width="1.5" opacity="0.04"/><line x1="500" y1="500" x2="1500" y2="2796" stroke="#82b1ff" stroke-width="1.5" opacity="0.04"/>
+  <rect y="2000" width="1290" height="796" fill="url(#fog)"/>
+</svg>

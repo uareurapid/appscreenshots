@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796" viewBox="0 0 1290 2796">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7c2d12"/><stop offset="30%" stop-color="#9a3412"/><stop offset="55%" stop-color="#b45309"/><stop offset="80%" stop-color="#d97706"/><stop offset="100%" stop-color="#f59e0b"/></linearGradient>
+    <pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse">
+      <circle cx="8" cy="8" r="4" fill="white" opacity="0.06"/>
+    </pattern>
+    <pattern id="dots2" width="16" height="16" patternUnits="userSpaceOnUse">
+      <circle cx="0" cy="0" r="4" fill="white" opacity="0.06"/>
+    </pattern>
+  </defs>
+  <rect width="1290" height="2796" fill="url(#bg)"/>
+  <!-- Dot pattern overlay -->
+  <rect x="770" y="0" width="520" height="2796" fill="url(#dots)"/>
+  <rect x="770" y="0" width="520" height="2796" fill="url(#dots2)"/>
+  <!-- Bold sweeping curve -->
+  <path d="M-50,2230 Q520,700 1340,1540" stroke="white" stroke-width="120" fill="none" opacity="0.1" stroke-linecap="round"/>
+  <!-- Thin accent curve -->
+  <path d="M130,1960 Q450,980 840,1540" stroke="#fbbf24" stroke-width="3" fill="none" opacity="0.18"/>
+  <!-- Geometric accent triangles -->
+  <polygon points="1100,420 1226,980 1135,1120" fill="white" opacity="0.08"/>
+  <polygon points="100,500 200,650 80,700" fill="white" opacity="0.06"/>
+</svg>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796" viewBox="0 0 1290 2796">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0f0720"/><stop offset="35%" stop-color="#1e1b4b"/><stop offset="65%" stop-color="#4a1942"/><stop offset="100%" stop-color="#701a4e"/></linearGradient>
+    <radialGradient id="b1" cx="0.5" cy="0.5" r="0.5"><stop offset="0%" stop-color="#f9a8d4" stop-opacity="0.18"/><stop offset="40%" stop-color="#f9a8d4" stop-opacity="0.08"/><stop offset="100%" stop-color="#f9a8d4" stop-opacity="0"/></radialGradient>
+    <radialGradient id="b2" cx="0.5" cy="0.5" r="0.5"><stop offset="0%" stop-color="#c4b5fd" stop-opacity="0.18"/><stop offset="40%" stop-color="#c4b5fd" stop-opacity="0.08"/><stop offset="100%" stop-color="#c4b5fd" stop-opacity="0"/></radialGradient>
+    <radialGradient id="b3" cx="0.5" cy="0.5" r="0.5"><stop offset="0%" stop-color="#e9d5ff" stop-opacity="0.15"/><stop offset="40%" stop-color="#e9d5ff" stop-opacity="0.06"/><stop offset="100%" stop-color="#e9d5ff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="s1" cx="0.5" cy="0.5" r="0.5"><stop offset="0%" stop-color="white" stop-opacity="0.7"/><stop offset="100%" stop-color="white" stop-opacity="0"/></radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="8"/></filter>
+  </defs>
+  <rect width="1290" height="2796" fill="url(#bg)"/>
+  <!-- Large bokeh orbs -->
+  <circle cx="200" cy="350" r="130" fill="url(#b1)"/><circle cx="1050" cy="500" r="100" fill="url(#b2)"/>
+  <circle cx="150" cy="1400" r="150" fill="url(#b3)"/><circle cx="950" cy="1200" r="120" fill="url(#b1)"/>
+  <circle cx="400" cy="900" r="110" fill="url(#b2)"/><circle cx="750" cy="600" r="90" fill="url(#b3)"/>
+  <circle cx="550" cy="1700" r="140" fill="url(#b1)"/><circle cx="1100" cy="1800" r="100" fill="url(#b2)"/>
+  <circle cx="300" cy="2200" r="120" fill="url(#b3)"/><circle cx="800" cy="2300" r="110" fill="url(#b1)"/>
+  <circle cx="500" cy="2500" r="90" fill="url(#b2)"/>
+  <!-- Star sparkles -->
+  <polygon points="280,600 283,610 293,613 283,616 280,626 277,616 267,613 277,610" fill="white" opacity="0.5"/><polygon points="850,350 853,360 863,363 853,366 850,376 847,366 837,363 847,360" fill="#f9a8d4" opacity="0.55"/>
+  <polygon points="180,1100 183,1110 193,1113 183,1116 180,1126 177,1116 167,1113 177,1110" fill="white" opacity="0.45"/><polygon points="780,900 783,910 793,913 783,916 780,926 777,916 767,913 777,910" fill="#f9a8d4" opacity="0.5"/>
+  <polygon points="450,400 453,410 463,413 453,416 450,426 447,416 437,413 447,410" fill="white" opacity="0.4"/><polygon points="1050,950 1053,960 1063,963 1053,966 1050,976 1047,966 1037,963 1047,960" fill="white" opacity="0.5"/>
+  <polygon points="600,1400 603,1410 613,1413 603,1416 600,1426 597,1416 587,1413 597,1410" fill="#f9a8d4" opacity="0.45"/><polygon points="350,2000 353,2010 363,2013 353,2016 350,2026 347,2016 337,2013 347,2010" fill="white" opacity="0.4"/>
+  <polygon points="950,2100 953,2110 963,2113 953,2116 950,2126 947,2116 937,2113 947,2110" fill="white" opacity="0.45"/><polygon points="120,1700 123,1710 133,1713 123,1716 120,1726 117,1716 107,1713 117,1710" fill="#f9a8d4" opacity="0.4"/>
+  <!-- Dust particles -->
+  <circle cx="100" cy="200" r="2" fill="white" opacity="0.4"/><circle cx="500" cy="150" r="1.5" fill="white" opacity="0.35"/>
+  <circle cx="1150" cy="300" r="2.5" fill="white" opacity="0.3"/><circle cx="800" cy="200" r="1.5" fill="white" opacity="0.4"/>
+  <circle cx="650" cy="800" r="2" fill="white" opacity="0.3"/><circle cx="950" cy="1500" r="2" fill="white" opacity="0.35"/>
+  <circle cx="200" cy="2500" r="1.5" fill="white" opacity="0.3"/><circle cx="1100" cy="2600" r="2" fill="white" opacity="0.4"/>
+  <circle cx="400" cy="1900" r="1.5" fill="white" opacity="0.25"/><circle cx="700" cy="2200" r="2" fill="white" opacity="0.3"/>
+  <circle cx="1000" cy="2400" r="1.5" fill="white" opacity="0.25"/><circle cx="250" cy="1500" r="2" fill="white" opacity="0.3"/>
+</svg>

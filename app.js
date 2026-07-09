@@ -1952,11 +1952,26 @@ async function switchProject(projectId) {
 }
 
 // Create a new project
-async function createProject(name) {
+async function createProject(name, templateId) {
     const id = 'project_' + Date.now();
     projects.push({ id, name, screenshotCount: 0 });
     saveProjectsMeta();
     await switchProject(id);
+    if (templateId && typeof getTemplateById === 'function') {
+        const tpl = getTemplateById(templateId);
+        if (tpl && !tpl.isNone) {
+            const s = tpl.settings;
+            state.defaults.background = JSON.parse(JSON.stringify(s.background));
+            if (s.screenshot && s.screenshot.shadow) {
+                state.defaults.screenshot.shadow = JSON.parse(JSON.stringify(s.screenshot.shadow));
+                state.defaults.screenshot.shadow.enabled = true;
+            }
+            if (s.text) {
+                ['headlineFont','headlineSize','headlineWeight','headlineColor','headlineItalic','headlineUnderline','headlineStrikethrough','subheadlineFont','subheadlineSize','subheadlineWeight','subheadlineColor','subheadlineOpacity','position','offsetY','lineHeight'].forEach(function(k) { if (s.text[k] !== undefined) state.defaults.text[k] = s.text[k]; });
+            }
+            saveState();
+        }
+    }
     updateProjectSelector();
 }
 
@@ -3800,6 +3815,12 @@ function setupEventListeners() {
             duplicateGroup.style.display = 'none';
         }
 
+        // Populate template selector
+        const templateSelect = document.getElementById('start-from-template-select');
+        if (templateSelect && typeof populateProjectTemplateSelect === 'function') {
+            populateProjectTemplateSelect();
+        }
+
         document.getElementById('project-modal').classList.add('visible');
         document.getElementById('project-name-input').focus();
     });
@@ -3865,10 +3886,12 @@ function setupEventListeners() {
         const mode = document.getElementById('project-modal').dataset.mode;
         if (mode === 'new') {
             const duplicateFromId = document.getElementById('duplicate-from-select').value;
+            const templateEl = document.getElementById('start-from-template-select');
+            const templateId = templateEl ? templateEl.value : '';
             if (duplicateFromId) {
                 await duplicateProject(duplicateFromId, name);
             } else {
-                createProject(name);
+                await createProject(name, templateId || undefined);
             }
         } else if (mode === 'rename') {
             renameProject(name);
@@ -3893,64 +3916,64 @@ function setupEventListeners() {
         document.getElementById('delete-project-modal').classList.remove('visible');
     });
 
-    // Export project backup
-    document.getElementById('export-project-btn').addEventListener('click', async () => {
-        if (!db) return;
-        try {
-            const dump = {};
-            for (const name of db.objectStoreNames) {
-                const tx = db.transaction(name, 'readonly');
-                const store = tx.objectStore(name);
-                dump[name] = await new Promise((resolve) => {
-                    const req = store.getAll();
-                    req.onsuccess = () => resolve(req.result);
-                    req.onerror = () => resolve([]);
-                });
-            }
-            const json = JSON.stringify(dump, null, 2);
-            const blob = new Blob([json], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'appscreen-backup-' + new Date().toISOString().slice(0, 10) + '.json';
-            a.click();
-            URL.revokeObjectURL(a.href);
-        } catch (e) {
-            console.error('Export failed:', e);
-            alert('Export failed: ' + e.message);
-        }
-    });
+    // Export project backup (UPSTREAM)
+    // document.getElementById('export-project-btn').addEventListener('click', async () => {
+    //     if (!db) return;
+    //     try {
+    //         const dump = {};
+    //         for (const name of db.objectStoreNames) {
+    //             const tx = db.transaction(name, 'readonly');
+    //             const store = tx.objectStore(name);
+    //             dump[name] = await new Promise((resolve) => {
+    //                 const req = store.getAll();
+    //                 req.onsuccess = () => resolve(req.result);
+    //                 req.onerror = () => resolve([]);
+    //             });
+    //         }
+    //         const json = JSON.stringify(dump, null, 2);
+    //         const blob = new Blob([json], { type: 'application/json' });
+    //         const a = document.createElement('a');
+    //         a.href = URL.createObjectURL(blob);
+    //         a.download = 'appscreen-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    //         a.click();
+    //         URL.revokeObjectURL(a.href);
+    //     } catch (e) {
+    //         console.error('Export failed:', e);
+    //         alert('Export failed: ' + e.message);
+    //     }
+    // });
 
-    // Import project backup
-    const importInput = document.getElementById('import-project-input');
-    document.getElementById('import-project-btn').addEventListener('click', () => {
-        importInput.click();
-    });
-    importInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file || !db) return;
-        try {
-            const text = await file.text();
-            const dump = JSON.parse(text);
-            for (const storeName of Object.keys(dump)) {
-                if (!db.objectStoreNames.contains(storeName)) continue;
-                const tx = db.transaction(storeName, 'readwrite');
-                const store = tx.objectStore(storeName);
-                for (const record of dump[storeName]) {
-                    store.put(record);
-                }
-                await new Promise((resolve, reject) => {
-                    tx.oncomplete = resolve;
-                    tx.onerror = () => reject(tx.error);
-                });
-            }
-            alert('Import complete! Reloading...');
-            location.reload();
-        } catch (e) {
-            console.error('Import failed:', e);
-            alert('Import failed: ' + e.message);
-        }
-        importInput.value = '';
-    });
+    // Import project backup (UPSTREAM)
+    // const importInput = document.getElementById('import-project-input');
+    // document.getElementById('import-project-btn').addEventListener('click', () => {
+    //     importInput.click();
+    // });
+    // importInput.addEventListener('change', async (e) => {
+    //     const file = e.target.files[0];
+    //     if (!file || !db) return;
+    //     try {
+    //         const text = await file.text();
+    //         const dump = JSON.parse(text);
+    //         for (const storeName of Object.keys(dump)) {
+    //             if (!db.objectStoreNames.contains(storeName)) continue;
+    //             const tx = db.transaction(storeName, 'readwrite');
+    //             const store = tx.objectStore(storeName);
+    //             for (const record of dump[storeName]) {
+    //                 store.put(record);
+    //             }
+    //             await new Promise((resolve, reject) => {
+    //                 tx.oncomplete = resolve;
+    //                 tx.onerror = () => reject(tx.error);
+    //             });
+    //         }
+    //         alert('Import complete! Reloading...');
+    //         location.reload();
+    //     } catch (e) {
+    //         console.error('Import failed:', e);
+    //         alert('Import failed: ' + e.message);
+    //     }
+    //     importInput.value = '';
+    // });
 
     // Apply style to all modal buttons
     document.getElementById('apply-style-cancel').addEventListener('click', () => {

@@ -16,6 +16,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23667eea'/><rect x='20' y='30' width='60' height='45' rx='5' fill='white'/><circle cx='50' cy='20' r='5' fill='white'/></svg>">
 
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="template-styles.css">
 
     <!-- Detect Tauri and add class for native styling -->
     <script>
@@ -73,7 +74,7 @@
 <body>
     <div class="app-container">
         <!-- Left Sidebar - Screenshots -->
-        <div class="sidebar">
+        <div class="sidebar" id="sidebar-left">
             <div class="sidebar-content">
                 <div class="sidebar-header">
                     <h2>Project</h2>
@@ -295,8 +296,10 @@
             </div>
         </div>
 
+        <div class="panel-resize-handle" id="resize-handle-left" title="Drag to resize sidebar"></div>
+
         <!-- Main Canvas Area -->
-        <div class="canvas-area">
+        <div class="canvas-area" id="canvas-area">
             <div class="preview-strip">
                 <div class="side-preview side-preview-far-left" id="side-preview-far-left">
                     <canvas id="preview-canvas-far-left"></canvas>
@@ -325,8 +328,10 @@
             </div>
         </div>
 
+        <div class="panel-resize-handle" id="resize-handle-right" title="Drag to resize sidebar"></div>
+
         <!-- Right Sidebar - Settings -->
-        <div class="sidebar sidebar-right">
+        <div class="sidebar sidebar-right" id="sidebar-right">
             <div class="sidebar-header">
                 <div class="tabs">
                     <button class="tab active" data-tab="background">
@@ -360,6 +365,15 @@
                             <path d="M17.5 14v7M14 17.5h7"/>
                         </svg>
                         <span>Elements</span>
+                    </button>
+                    <button class="tab" data-tab="template">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="3" width="7" height="7"/>
+                            <rect x="14" y="3" width="7" height="7"/>
+                            <rect x="14" y="14" width="7" height="7"/>
+                            <rect x="3" y="14" width="7" height="7"/>
+                        </svg>
+                        <span>Template</span>
                     </button>
                     <button class="tab" data-tab="popouts">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1310,6 +1324,30 @@
                 </div>
             </div>
 
+            <!-- Template Tab -->
+            <div class="tab-content" id="tab-template">
+                <div class="control-group">
+                    <label class="control-label">Visual Style Template</label>
+                    <p class="hint-text" style="margin-bottom: 12px;">Choose a pre-defined style. Your screenshots and text content are preserved.</p>
+                </div>
+
+                <div class="template-grid" id="template-grid">
+                    <!-- Template cards populated by JS -->
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="control-group">
+                    <button class="export-btn export-all-btn" id="apply-template-all-btn" style="background: var(--accent);">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                        Apply to All Screenshots
+                    </button>
+                </div>
+            </div>
+
             <!-- Popouts Tab -->
             <div class="tab-content" id="tab-popouts">
                 <button class="add-popout-btn" id="add-popout-btn">
@@ -1499,13 +1537,21 @@
             </div>
             <h3 class="modal-title" id="project-modal-title">New Project</h3>
             <div class="control-group" style="margin: 20px 0; text-align: left;">
-                <label class="control-label">Project Name</label>
-                <input type="text" id="project-name-input" placeholder="My App Screenshots">
+                <label class="control-label">Start from Template</label>
+                <select id="project-template-select" class="control-select">
+                    <option value="">None (start blank)</option>
+                </select>
             </div>
             <div class="control-group" style="margin: 20px 0; text-align: left; display: none;" id="duplicate-from-group">
                 <label class="control-label">Duplicate from</label>
                 <select id="duplicate-from-select" class="control-select">
                     <option value="">None (empty project)</option>
+                </select>
+            </div>
+            <div class="control-group" style="margin: 20px 0; text-align: left;" id="start-from-template-group">
+                <label class="control-label">Start from Template</label>
+                <select id="start-from-template-select" class="control-select">
+                    <option value="">None (start blank)</option>
                 </select>
             </div>
             <div class="modal-buttons">
@@ -1965,6 +2011,13 @@
     <script src="magical-titles.js"></script>
     <script src="lucide-icons.js"></script>
     <script src="three-renderer.js"></script>
+    <script src="template-bg-generator.js"></script>
+    <script src="template-images.js"></script>
+    <script src="templates.js"></script>
+    <script src="template-ui.js"></script>
     <script src="app.js"></script>
+    <script>
+
+    </script>
 </body>
 </html>

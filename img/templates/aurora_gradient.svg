@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1290" height="2796" viewBox="0 0 1290 2796">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1e1b4b"/><stop offset="25%" stop-color="#312e81"/><stop offset="50%" stop-color="#0e7490"/><stop offset="75%" stop-color="#065f46"/><stop offset="100%" stop-color="#451a03"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5"><stop offset="0%" stop-color="#67e8f9" stop-opacity="0.08"/><stop offset="100%" stop-color="#67e8f9" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glow2" cx="0.5" cy="0.5" r="0.5"><stop offset="0%" stop-color="#a3e635" stop-opacity="0.06"/><stop offset="100%" stop-color="#a3e635" stop-opacity="0"/></radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="60"/></filter>
+    <filter id="blur2"><feGaussianBlur stdDeviation="40"/></filter>
+  </defs>
+  <rect width="1290" height="2796" fill="url(#bg)"/>
+  <!-- Aurora wave bands -->
+  <path d="M-100,280 Q150,200 350,320 Q580,460 750,300 Q920,140 1100,280 Q1200,360 1400,260" stroke="#67e8f9" stroke-width="120" fill="none" opacity="0.2" stroke-linecap="round" filter="url(#blur)"/>
+  <path d="M-100,680 Q200,580 400,720 Q650,880 800,660 Q1000,440 1200,600 Q1350,700 1400,620" stroke="#a5f3fc" stroke-width="100" fill="none" opacity="0.16" stroke-linecap="round" filter="url(#blur)"/>
+  <path d="M-100,1100 Q180,980 420,1140 Q680,1320 850,1080 Q1050,880 1250,1040 Q1380,1120 1400,1060" stroke="#6ee7b7" stroke-width="90" fill="none" opacity="0.15" stroke-linecap="round" filter="url(#blur)"/>
+  <path d="M-100,1580 Q200,1440 450,1620 Q700,1800 880,1550 Q1080,1300 1300,1500 Q1400,1600 1400,1540" stroke="#a3e635" stroke-width="80" fill="none" opacity="0.13" stroke-linecap="round" filter="url(#blur)"/>
+  <path d="M-100,2100 Q220,1960 480,2140 Q750,2340 900,2080 Q1100,1820 1280,2000" stroke="#fbbf24" stroke-width="70" fill="none" opacity="0.11" stroke-linecap="round" filter="url(#blur)"/>
+  <!-- Soft particle clouds -->
+  <circle cx="300" cy="400" r="220" fill="url(#glow)" filter="url(#blur2)"/>
+  <circle cx="900" cy="900" r="250" fill="url(#glow)" filter="url(#blur2)"/>
+  <circle cx="500" cy="1600" r="200" fill="url(#glow2)" filter="url(#blur2)"/>
+  <circle cx="1000" cy="2000" r="230" fill="url(#glow2)" filter="url(#blur2)"/>
+</svg>

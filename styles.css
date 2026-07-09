@@ -129,9 +129,46 @@ html.tauri-app .right-sidebar {
 
 .app-container {
     display: grid;
-    grid-template-columns: 320px 1fr 340px;
+    grid-template-columns: var(--panel-left-width, 320px) 4px 1fr 4px var(--panel-right-width, 340px);
     min-height: 100vh;
     max-height: 100vh;
+}
+
+/* Panel resize handles */
+.panel-resize-handle {
+    width: 4px;
+    cursor: col-resize;
+    background: var(--border-color);
+    transition: background 0.15s ease, width 0.15s ease;
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.panel-resize-handle:hover,
+.panel-resize-handle.active {
+    background: var(--accent);
+    width: 4px;
+}
+
+body.resizing {
+    cursor: col-resize !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+body.resizing * {
+    cursor: col-resize !important;
+}
+
+/* Wider hit target while maintaining visual 4px */
+.panel-resize-handle::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    right: -6px;
+    top: 0;
+    bottom: 0;
 }
 
 /* Sidebar styles */
