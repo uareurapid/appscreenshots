@@ -15,11 +15,11 @@ const state = {
             gradient: {
                 angle: 135,
                 stops: [
-                    { color: '#667eea', position: 0 },
-                    { color: '#764ba2', position: 100 }
+                    { color: '#5eecc0', position: 0 },
+                    { color: '#3da88a', position: 100 }
                 ]
             },
-            solid: '#1a1a2e',
+            solid: '#1c1d21',
             image: null,
             imageFit: 'cover',
             imageBlur: 0,
@@ -1321,9 +1321,23 @@ const noScreenshot = document.getElementById('no-screenshot');
 // IndexedDB for larger storage (can store hundreds of MB vs localStorage's 5-10MB)
 let db = null;
 const DB_NAME = 'AppStoreScreenshotGenerator';
-const DB_VERSION = 2;
+// Bumped 2 → 3: db-init.js previously created the wrong object stores
+// (screenshots/settings/assets) and never created `meta`, which left the DB
+// unusable. v3 forces onupgradeneeded to fire and create the correct schema.
+const DB_VERSION = 3;
 const PROJECTS_STORE = 'projects';
 const META_STORE = 'meta';
+
+// Expose to window so db-init.js (which loads before app.js) uses the same
+// database name/version instead of its own mismatched defaults.
+window.DB_NAME = DB_NAME;
+window.DB_VERSION = DB_VERSION;
+
+// Bridge between app.js's module-local `db` and db-init.js's `window.db`.
+// Returns whichever handle is currently open, or null.
+function getDb() {
+    return db || window.db || null;
+}
 
 let currentProjectId = 'default';
 let projects = [{ id: 'default', name: 'Default Project', screenshotCount: 0 }];
@@ -1341,6 +1355,9 @@ function openDatabase() {
 
             request.onsuccess = () => {
                 db = request.result;
+                // Keep the global handle in sync so db-init.js logic shares the
+                // same open connection instead of opening a duplicate.
+                window.db = db;
                 resolve(db);
             };
 
@@ -1474,14 +1491,21 @@ async function init() {
 
 // Set up event listeners immediately (don't wait for async init)
 function initSync() {
-    setupEventListeners();
-    setupElementEventListeners();
-    setupPopoutEventListeners();
-    setupSliderResetButtons();
-    initFontPicker();
-    updateGradientStopsUI();
-    updateCanvas();
-    // Then load saved data asynchronously
+    // Run each setup step independently so one missing element/bug can't abort
+    // the whole chain — critically, init() (which opens the database) must still
+    // run even if a DOM-wiring function throws.
+    const safe = (label, fn) => {
+        try { fn(); }
+        catch (e) { console.error(`[initSync] ${label} failed:`, e); }
+    };
+    safe('setupEventListeners', setupEventListeners);
+    safe('setupElementEventListeners', setupElementEventListeners);
+    safe('setupPopoutEventListeners', setupPopoutEventListeners);
+    safe('setupSliderResetButtons', setupSliderResetButtons);
+    safe('initFontPicker', initFontPicker);
+    safe('updateGradientStopsUI', updateGradientStopsUI);
+    safe('updateCanvas', updateCanvas);
+    // Then load saved data asynchronously — must always run so the DB opens
     init();
 }
 
@@ -1510,7 +1534,12 @@ function saveState() {
             name: s.name,
             deviceType: s.deviceType,
             localizedImages: localizedImages,
-            background: s.background,
+            // Strip non-clonable Image objects from background before DB write.
+            // String URLs (from URL-based templates) and _overlayUrl/_pendingImageUrl
+            // are safe to persist — only HTMLImageElement instances must be removed.
+            background: Object.assign({}, s.background, {
+                image: s.background.image instanceof HTMLImageElement ? undefined : s.background.image
+            }),
             screenshot: s.screenshot,
             text: s.text,
             elements: (s.elements || []).map(el => ({
@@ -1763,6 +1792,24 @@ function loadState() {
 
                         function checkAllLoaded() {
                             if (loadedCount === totalToLoad) {
+                                // Reconstruct background Image objects from persisted
+                                // URLs (_overlayUrl, _pendingImageUrl, or string image)
+                                // that were stripped during saveState to avoid DataCloneError.
+                                state.screenshots.forEach(function(ss) {
+                                    if (!ss.background) return;
+                                    var url = ss.background._overlayUrl || ss.background._pendingImageUrl;
+                                    // Also handle templates that stored image as a URL string
+                                    if (!url && typeof ss.background.image === 'string') {
+                                        url = ss.background.image;
+                                    }
+                                    if (url && !(ss.background.image instanceof HTMLImageElement)) {
+                                        var bgImg = new Image();
+                                        bgImg.onload = function() {
+                                            ss.background.image = bgImg;
+                                        };
+                                        bgImg.src = url;
+                                    }
+                                });
                                 updateScreenshotList();
                                 syncUIWithState();
                                 updateGradientStopsUI();
@@ -1855,11 +1902,11 @@ function resetStateToDefaults() {
             gradient: {
                 angle: 135,
                 stops: [
-                    { color: '#667eea', position: 0 },
-                    { color: '#764ba2', position: 100 }
+                    { color: '#5eecc0', position: 0 },
+                    { color: '#3da88a', position: 100 }
                 ]
             },
-            solid: '#1a1a2e',
+            solid: '#1c1d21',
             image: null,
             imageFit: 'cover',
             imageBlur: 0,
@@ -2013,7 +2060,13 @@ async function deleteProject() {
 
 // Export current project as a .json file download
 async function exportProject() {
-    if (!db) {
+    // Resolve the connection lazily: fall back to window.db (set by db-init.js)
+    // or open on demand via ensureDatabase(). Fixes "Database not available"
+    // when the local db handle never got set during init.
+    if (!getDb() && typeof ensureDatabase === 'function') {
+        await ensureDatabase();
+    }
+    if (!getDb()) {
         await showAppAlert('Database not available', 'error');
         return;
     }
@@ -2061,7 +2114,13 @@ async function exportProject() {
 
 // Import a project from a .json file
 async function importProject(file) {
-    if (!db) {
+    // Resolve the connection lazily: fall back to window.db (set by db-init.js)
+    // or open on demand via ensureDatabase(). Fixes "Database not available"
+    // when the local db handle never got set during init.
+    if (!getDb() && typeof ensureDatabase === 'function') {
+        await ensureDatabase();
+    }
+    if (!getDb()) {
         await showAppAlert('Database not available', 'error');
         return;
     }
@@ -2278,23 +2337,29 @@ function syncUIWithState() {
     document.getElementById('solid-options').style.display = bg.type === 'solid' ? 'block' : 'none';
     document.getElementById('image-options').style.display = bg.type === 'image' ? 'block' : 'none';
 
-    // Gradient
-    document.getElementById('gradient-angle').value = bg.gradient.angle;
-    document.getElementById('gradient-angle-value').textContent = formatValue(bg.gradient.angle) + '°';
-    updateGradientStopsUI();
+    // Gradient (guard: image/solid templates may not define bg.gradient)
+    if (bg.gradient) {
+        const angleEl = document.getElementById('gradient-angle');
+        if (angleEl) angleEl.value = bg.gradient.angle;
+        const angleValEl = document.getElementById('gradient-angle-value');
+        if (angleValEl) angleValEl.textContent = formatValue(bg.gradient.angle) + '°';
+        updateGradientStopsUI();
+    }
 
     // Solid color
-    document.getElementById('solid-color').value = bg.solid;
-    document.getElementById('solid-color-hex').value = bg.solid;
+    if (bg.solid !== undefined) {
+        document.getElementById('solid-color').value = bg.solid;
+        document.getElementById('solid-color-hex').value = bg.solid;
+    }
 
     // Image background
-    document.getElementById('bg-image-fit').value = bg.imageFit;
-    document.getElementById('bg-blur').value = bg.imageBlur;
-    document.getElementById('bg-blur-value').textContent = formatValue(bg.imageBlur) + 'px';
-    document.getElementById('bg-overlay-color').value = bg.overlayColor;
-    document.getElementById('bg-overlay-hex').value = bg.overlayColor;
-    document.getElementById('bg-overlay-opacity').value = bg.overlayOpacity;
-    document.getElementById('bg-overlay-opacity-value').textContent = formatValue(bg.overlayOpacity) + '%';
+    document.getElementById('bg-image-fit').value = bg.imageFit || 'cover';
+    document.getElementById('bg-blur').value = bg.imageBlur || 0;
+    document.getElementById('bg-blur-value').textContent = formatValue(bg.imageBlur || 0) + 'px';
+    document.getElementById('bg-overlay-color').value = bg.overlayColor || '#000000';
+    document.getElementById('bg-overlay-hex').value = bg.overlayColor || '#000000';
+    document.getElementById('bg-overlay-opacity').value = bg.overlayOpacity || 0;
+    document.getElementById('bg-overlay-opacity-value').textContent = formatValue(bg.overlayOpacity || 0) + '%';
 
     // Noise
     document.getElementById('noise-toggle').classList.toggle('active', bg.noise);
@@ -4839,6 +4904,16 @@ function setupEventListeners() {
         }
         updateCanvas(); // Keep export canvas in sync
     });
+
+    // Apply template to all screenshots button
+    var applyTemplateAllBtn = document.getElementById('apply-template-all-btn');
+    if (applyTemplateAllBtn) {
+        applyTemplateAllBtn.addEventListener('click', function() {
+            if (typeof currentTemplateId !== 'undefined' && currentTemplateId && typeof applyTemplateToAll === 'function') {
+                applyTemplateToAll(currentTemplateId);
+            }
+        });
+    }
 }
 
 // Per-screenshot mode is now always active (all settings are per-screenshot)
@@ -5508,7 +5583,7 @@ function showTranslateConfirmDialog(providerName) {
         overlay.innerHTML = `
             <div class="modal" style="max-width: 380px;">
                 <div class="modal-icon" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #764ba2;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #3da88a;">
                         <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6"/>
                     </svg>
                 </div>
@@ -5539,7 +5614,7 @@ function showTranslateConfirmDialog(providerName) {
 
                 <div class="modal-buttons">
                     <button class="modal-btn modal-btn-cancel" id="translate-cancel">Cancel</button>
-                    <button class="modal-btn modal-btn-confirm" id="translate-confirm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">Translate</button>
+                    <button class="modal-btn modal-btn-confirm" id="translate-confirm" style="background: linear-gradient(135deg, #5eecc0 0%, #3da88a 100%);">Translate</button>
                 </div>
             </div>
         `;
@@ -5651,7 +5726,7 @@ async function translateAllText() {
     progressOverlay.innerHTML = `
         <div class="modal" style="text-align: center; min-width: 320px;">
             <div class="modal-icon" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #764ba2; animation: spin 1s linear infinite;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #3da88a; animation: spin 1s linear infinite;">
                     <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                 </svg>
             </div>
@@ -6874,9 +6949,15 @@ function replaceScreenshot(index) {
 
 function updateGradientStopsUI() {
     const container = document.getElementById('gradient-stops');
+    if (!container) return;
     container.innerHTML = '';
 
     const bg = getBackground();
+    // Only render gradient stops for gradient-type backgrounds. Image/solid
+    // backgrounds have no gradient object — bail out instead of crashing.
+    if (bg.type !== 'gradient' || !bg.gradient || !bg.gradient.stops) {
+        return;
+    }
     bg.gradient.stops.forEach((stop, index) => {
         const div = document.createElement('div');
         div.className = 'gradient-stop';
@@ -7254,7 +7335,13 @@ function drawBackgroundToContext(context, dims, bg) {
         context.fillRect(0, 0, dims.width, dims.height);
     } else if (bg.type === 'image' && bg.image) {
         const img = bg.image;
-        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+        // Guard against broken/unloaded images (e.g. template URLs that 404).
+        if (!img || !img.complete || !img.naturalWidth) {
+            context.fillStyle = '#1a1a2e';
+            context.fillRect(0, 0, dims.width, dims.height);
+            return;
+        }
+        let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
         let dx = 0, dy = 0, dw = dims.width, dh = dims.height;
 
         if (bg.imageFit === 'cover') {
@@ -7300,8 +7387,24 @@ function drawBackgroundToContext(context, dims, bg) {
     }
 }
 
+// Reusable offscreen canvas for noise generation, flagged for frequent readback.
+// Drawing noise onto this scratch canvas avoids the willReadFrequently warning on
+// every main/preview/export canvas that has noise enabled.
+const _noiseScratchCanvas = document.createElement('canvas');
+const _noiseScratchCtx = _noiseScratchCanvas.getContext('2d', { willReadFrequently: true });
+
 function drawNoiseToContext(context, dims, intensity) {
-    const imageData = context.getImageData(0, 0, dims.width, dims.height);
+    // Use a scratch canvas flagged with willReadFrequently so the getImageData/
+    // putImageData readback loop doesn't trigger the perf warning on the main,
+    // side-preview, and export canvases.
+    if (_noiseScratchCanvas.width !== dims.width || _noiseScratchCanvas.height !== dims.height) {
+        _noiseScratchCanvas.width = dims.width;
+        _noiseScratchCanvas.height = dims.height;
+    }
+    _noiseScratchCtx.clearRect(0, 0, dims.width, dims.height);
+    _noiseScratchCtx.drawImage(context.canvas, 0, 0, dims.width, dims.height);
+
+    const imageData = _noiseScratchCtx.getImageData(0, 0, dims.width, dims.height);
     const data = imageData.data;
     const noiseAmount = intensity / 100;
 
@@ -7312,7 +7415,8 @@ function drawNoiseToContext(context, dims, intensity) {
         data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
     }
 
-    context.putImageData(imageData, 0, 0);
+    _noiseScratchCtx.putImageData(imageData, 0, 0);
+    context.drawImage(_noiseScratchCanvas, 0, 0, dims.width, dims.height);
 }
 
 function drawScreenshotToContext(context, dims, img, settings) {
@@ -7846,7 +7950,14 @@ function drawBackground() {
         ctx.fillRect(0, 0, dims.width, dims.height);
     } else if (bg.type === 'image' && bg.image) {
         const img = bg.image;
-        let sx = 0, sy = 0, sw = img.width, sh = img.height;
+        // Guard against broken/unloaded images (e.g. template URLs that 404).
+        // A failed Image has naturalWidth 0 and is not drawImage-valid.
+        if (!img || !img.complete || !img.naturalWidth) {
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, dims.width, dims.height);
+            return;
+        }
+        let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
         let dx = 0, dy = 0, dw = dims.width, dh = dims.height;
 
         if (bg.imageFit === 'cover') {

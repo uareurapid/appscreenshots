@@ -46,6 +46,15 @@ const deviceConfigs = {
         positionOffsetFactor: 0.5,
         cornerRadiusFactor: 0.04,
         modelRotation: { x: 0, y: 0, z: 0 }  // Adjust to correct model tilt (in degrees)
+    },
+    ipad: {
+        modelPath: 'models/apple_ipad_pro.glb',
+        aspectRatio: 3 / 4,
+        screenHeightFactor: 17.2,
+        screenOffset: { x: 0.0, y: 38.54, z: 0.05 },
+        positionOffsetFactor: 0.75,
+        cornerRadiusFactor: 0.06,
+        modelRotation: { x: 0, y: 0, z: 0 }
     }
 };
 
@@ -85,6 +94,20 @@ var frameColorPresets = {
           materials: { back_glass: '#7a9a7c', frame: '#a8b8aa', antenna: '#6a8a6c' } },
         { id: 'jetblack', label: 'Titanium Jetblack', swatch: '#404040',
           materials: { back_glass: '#2a2a2a', frame: '#484848', antenna: '#353535' } },
+    ],
+    ipad: [
+        { id: 'silver', label: 'Silver', swatch: '#e3e0da',
+          materials: { backpanel: '#e3e0da', metalframe: '#c4bfb8', gray: '#221f1b' } },
+        { id: 'spacegray', label: 'Space Gray', swatch: '#3d3b39',
+          materials: { backpanel: '#3d3b39', metalframe: '#2a2826', gray: '#1a1918' } },
+        { id: 'starlight', label: 'Starlight', swatch: '#f0ede6',
+          materials: { backpanel: '#f0ede6', metalframe: '#d8d2c8', gray: '#2a261e' } },
+        { id: 'spaceblack', label: 'Space Black', swatch: '#2a2826',
+          materials: { backpanel: '#2a2826', metalframe: '#1c1a18', gray: '#121110' } },
+        { id: 'purple', label: 'Purple', swatch: '#7d6da0',
+          materials: { backpanel: '#7d6da0', metalframe: '#5c4d78', gray: '#1e1825' } },
+        { id: 'blue', label: 'Blue', swatch: '#6b859c',
+          materials: { backpanel: '#6b859c', metalframe: '#4b6378', gray: '#1a1f24' } },
     ]
 };
 
@@ -342,8 +365,81 @@ function loadPhoneModel() {
         },
         (error) => {
             console.error('Error loading phone model:', error);
+            phoneModelLoading = false;
+            // Fallback: create a procedural device for iPad (no GLB file needed)
+            if (currentDeviceModel === 'ipad') {
+                createProceduralIpad();
+            }
         }
     );
+}
+
+// Procedural iPad model — a rounded-rect body with screen cutout.
+// Used when no iPad .glb file is available.
+function createProceduralIpad() {
+    const config = deviceConfigs.ipad;
+    const w = 2.2;  // width
+    const h = 3.0;  // height
+    const d = 0.08; // depth
+    const r = 0.18; // corner radius
+    const screenInset = 0.12;
+
+    // Body: a box with beveled edges simulated via RoundedBox (Box + edge bevels look OK)
+    const bodyGeo = new THREE.BoxGeometry(w, h, d);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: '#3d3b39', roughness: 0.4, metalness: 0.3 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.name = 'ipad-body';
+
+    // Screen: slightly inset dark rect on the front face
+    const screenGeo = new THREE.PlaneGeometry(w - screenInset * 2, h - screenInset * 2);
+    const screenMat = new THREE.MeshStandardMaterial({ color: '#000000', roughness: 0.1, metalness: 0.0 });
+    const screen = new THREE.Mesh(screenGeo, screenMat);
+    screen.position.z = d / 2 + 0.001;
+    screen.name = 'ipad-screen';
+
+    // Group everything
+    phoneModel = new THREE.Group();
+    phoneModel.add(body);
+    phoneModel.add(screen);
+
+    // Scale
+    baseModelScale = 3.75 / Math.max(w, h);
+    phoneModel.scale.setScalar(baseModelScale);
+
+    // Pivot
+    phonePivot = new THREE.Group();
+    const screenOffset = config.screenOffset;
+    phoneModel.position.set(
+        -screenOffset.x * baseModelScale,
+        -screenOffset.y * baseModelScale,
+        -screenOffset.z * baseModelScale
+    );
+    phonePivot.add(phoneModel);
+    threeScene.add(phonePivot);
+
+    // Screen overlay for screenshot texture
+    screenMesh = screen;
+    createScreenOverlay();
+
+    phoneModelLoaded = true;
+
+    if (typeof state !== 'undefined') {
+        updateThreeJSBackground();
+        const ss = typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : state.defaults?.screenshot;
+        const rotation3D = ss?.rotation3D || { x: 0, y: 0, z: 0 };
+        setThreeJSRotation(rotation3D.x, rotation3D.y, rotation3D.z);
+        if (ss?.frameColor) {
+            setPhoneFrameColor(ss.frameColor, 'ipad');
+        }
+        if (state.screenshots.length > 0) {
+            updateScreenTexture();
+        }
+        if (typeof updateCanvas === 'function') {
+            updateCanvas();
+        }
+    }
+
+    console.log('Procedural iPad created successfully');
 }
 
 // Switch to a different phone model

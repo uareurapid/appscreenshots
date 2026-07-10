@@ -28,7 +28,7 @@
 
 .template-card.selected {
     border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent), 0 4px 12px rgba(10, 132, 255, 0.2);
+    box-shadow: 0 0 0 1px var(--accent), 0 4px 12px rgba(94, 236, 192, 0.15);
 }
 
 .template-card-none {
@@ -46,7 +46,7 @@
     border-style: dashed;
     border-color: var(--accent);
     opacity: 0.85;
-    box-shadow: 0 0 0 1px var(--accent), 0 4px 12px rgba(10, 132, 255, 0.12);
+    box-shadow: 0 0 0 1px var(--accent), 0 4px 12px rgba(94, 236, 192, 0.08);
 }
 
 .template-card-preview {

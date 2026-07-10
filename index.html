@@ -418,7 +418,7 @@
                                     <div class="preset-swatch" title="Neon Horizon" style="background: linear-gradient(125deg, #0d0221 0%, #711c91 50%, #0abdc6 100%)" data-gradient="linear-gradient(125deg, #0d0221 0%, #711c91 50%, #0abdc6 100%)"></div>
                                     <div class="preset-swatch" title="Electric Surge" style="background: linear-gradient(135deg, #1a0533 0%, #5b21b6 50%, #06b6d4 100%)" data-gradient="linear-gradient(135deg, #1a0533 0%, #5b21b6 50%, #06b6d4 100%)"></div>
                                     <div class="preset-swatch" title="Synthwave Dusk" style="background: linear-gradient(150deg, #2d1b69 0%, #ff2d78 50%, #ff901f 100%)" data-gradient="linear-gradient(150deg, #2d1b69 0%, #ff2d78 50%, #ff901f 100%)"></div>
-                                    <div class="preset-swatch" title="Indigo Rush" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)" data-gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"></div>
+                                    <div class="preset-swatch" title="Mint Rush" style="background: linear-gradient(135deg, #5eecc0 0%, #3da88a 100%)" data-gradient="linear-gradient(135deg, #5eecc0 0%, #3da88a 100%)"></div>
                                     <!-- Nature / Aurora -->
                                     <div class="preset-swatch" title="Northern Lights" style="background: linear-gradient(135deg, #172347 0%, #015268 40%, #0ef3c5 100%)" data-gradient="linear-gradient(135deg, #172347 0%, #015268 40%, #0ef3c5 100%)"></div>
                                     <div class="preset-swatch" title="Deep Forest" style="background: linear-gradient(160deg, #0f2027 0%, #203a43 50%, #2c5364 100%)" data-gradient="linear-gradient(160deg, #0f2027 0%, #203a43 50%, #2c5364 100%)"></div>
@@ -459,12 +459,12 @@
                         <label class="control-label">Colors</label>
                         <div class="gradient-stops" id="gradient-stops">
                             <div class="gradient-stop">
-                                <input type="color" value="#667eea" data-stop="0">
+                                <input type="color" value="#5eecc0" data-stop="0">
                                 <input type="number" value="0" min="0" max="100" data-stop="0">
                                 <span>%</span>
                             </div>
                             <div class="gradient-stop">
-                                <input type="color" value="#764ba2" data-stop="1">
+                                <input type="color" value="#3da88a" data-stop="1">
                                 <input type="number" value="100" min="0" max="100" data-stop="1">
                                 <span>%</span>
                             </div>
@@ -564,6 +564,7 @@
                         <label class="control-label">Device Model</label>
                         <div class="btn-group" id="device-3d-selector">
                             <button class="active" data-model="iphone">iPhone</button>
+                            <button data-model="ipad">iPad</button>
                             <button data-model="samsung">Samsung</button>
                         </div>
                     </div>
@@ -1537,6 +1538,10 @@
             </div>
             <h3 class="modal-title" id="project-modal-title">New Project</h3>
             <div class="control-group" style="margin: 20px 0; text-align: left;">
+                <label class="control-label" for="project-name-input">Project Name</label>
+                <input type="text" id="project-name-input" class="control-select" placeholder="My Project" maxlength="60" />
+            </div>
+            <div class="control-group" style="margin: 20px 0; text-align: left;">
                 <label class="control-label">Start from Template</label>
                 <select id="project-template-select" class="control-select">
                     <option value="">None (start blank)</option>
@@ -1642,7 +1647,7 @@
     <div class="modal-overlay" id="translate-modal">
         <div class="modal translate-modal">
             <div class="modal-icon" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #764ba2;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #3da88a;">
                     <path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M22 22l-5-10-5 10M14 18h6"/>
                 </svg>
             </div>
@@ -1670,7 +1675,7 @@
 
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" id="translate-modal-cancel">Cancel</button>
-                <button class="modal-btn modal-btn-confirm" id="translate-modal-apply" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">Apply Translations</button>
+                <button class="modal-btn modal-btn-confirm" id="translate-modal-apply" style="background: linear-gradient(135deg, #5eecc0 0%, #3da88a 100%);">Apply Translations</button>
             </div>
         </div>
     </div>
@@ -2015,6 +2020,7 @@
     <script src="template-images.js"></script>
     <script src="templates.js"></script>
     <script src="template-ui.js"></script>
+    <script src="db-init.js"></script>
     <script src="app.js"></script>
     <script>
 

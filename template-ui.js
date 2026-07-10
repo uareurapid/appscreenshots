@@ -87,9 +87,11 @@ function createTemplateCard(template) {
     card.appendChild(preview);
 
     // For image-based templates, try loading the real image as preview
-    if (template.settings.background.type === 'image' && template.settings.background.image) {
+    if (template.settings.background.type === 'image') {
         var previewImg = new Image();
         previewImg.crossOrigin = 'anonymous';
+        // Resolve source: explicit URL, else fall back to generated background
+        var imgSrc = template.settings.background.image || (typeof getTemplateBgUrl === 'function' ? getTemplateBgUrl(template.id) : null);
         previewImg.onload = function() {
             var ctx = previewCanvas.getContext('2d');
             ctx.drawImage(previewImg, 0, 0, previewCanvas.width, previewCanvas.height);
@@ -108,7 +110,15 @@ function createTemplateCard(template) {
             ctx.fill();
             ctx.globalAlpha = 1;
         };
-        previewImg.src = template.settings.background.image;
+        // If remote image fails, fall back to generated background (never 404s)
+        previewImg.onerror = function() {
+            if (typeof getTemplateBgUrl === 'function') {
+                var fb = new Image();
+                fb.onload = previewImg.onload;
+                fb.src = getTemplateBgUrl(template.id);
+            }
+        };
+        if (imgSrc) previewImg.src = imgSrc;
     }
 
     // Selected indicator
@@ -144,12 +154,15 @@ function createTemplateCard(template) {
 
     card.appendChild(info);
 
-    // Click handler
+    // Click handler — apply to currently selected screenshot only
     card.addEventListener('click', function() {
-        if (typeof applyTemplateToAll === 'function') {
-            applyTemplateToAll(template.id);
+        if (state.screenshots.length > 0 && typeof applyTemplateToScreenshot === 'function') {
+            var ss = state.screenshots[state.selectedIndex];
+            if (ss) applyTemplateToScreenshot(ss, template.id);
+            currentTemplateId = template.id;
         }
         if (typeof updateCanvas === 'function') updateCanvas();
+        if (typeof syncUIWithState === 'function') syncUIWithState();
         document.querySelectorAll('.template-card').forEach(function(c) { c.classList.remove('selected'); });
         card.classList.add('selected');
     });
