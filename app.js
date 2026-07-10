@@ -1435,6 +1435,39 @@ function saveProjectsMeta() {
     }
 }
 
+// Populate the new-project template selector with actual visual template options
+function populateProjectTemplateSelect() {
+    var select = document.getElementById('project-template-select');
+    if (!select || typeof visualTemplates === 'undefined') return;
+    select.innerHTML = '';
+
+    var blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = 'None (start blank)';
+    select.appendChild(blank);
+
+    // Group templates by category
+    var categories = {};
+    visualTemplates.forEach(function(t) {
+        if (t.isNone) return;
+        var cat = t.category || 'other';
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(t);
+    });
+
+    Object.keys(categories).forEach(function(cat) {
+        var group = document.createElement('optgroup');
+        group.label = cat.charAt(0).toUpperCase() + cat.slice(1);
+        categories[cat].forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            group.appendChild(opt);
+        });
+        select.appendChild(group);
+    });
+}
+
 // Update project selector dropdown
 function updateProjectSelector() {
     const menu = document.getElementById('project-menu');
@@ -1487,6 +1520,29 @@ async function init() {
         syncUIWithState();
         updateCanvas();
     }
+
+    // Show first-visit tutorial
+    if (!localStorage.getItem('tutorialSeen')) {
+        setTimeout(function() {
+            var tutorialModal = document.getElementById('tutorial-modal');
+            if (tutorialModal) tutorialModal.classList.add('visible');
+        }, 800);
+    }
+    document.getElementById('tutorial-got-it')?.addEventListener('click', function() {
+        localStorage.setItem('tutorialSeen', '1');
+        document.getElementById('tutorial-modal').classList.remove('visible');
+    });
+
+    // Show export reminder (dismissed per session, re-shown after page reload)
+    var reminder = document.getElementById('export-reminder');
+    if (reminder && !sessionStorage.getItem('reminderDismissed')) {
+        reminder.style.display = 'flex';
+    }
+    document.getElementById('dismiss-reminder')?.addEventListener('click', function() {
+        var r = document.getElementById('export-reminder');
+        if (r) r.style.display = 'none';
+        sessionStorage.setItem('reminderDismissed', '1');
+    });
 }
 
 // Set up event listeners immediately (don't wait for async init)
@@ -3867,7 +3923,7 @@ function setupEventListeners() {
 
         const duplicateGroup = document.getElementById('duplicate-from-group');
         const duplicateSelect = document.getElementById('duplicate-from-select');
-        if (projects.length > 0) {
+        if (projects.length > 1) {
             duplicateGroup.style.display = 'block';
             duplicateSelect.innerHTML = '<option value="">None (empty project)</option>';
             projects.forEach(p => {
@@ -3881,7 +3937,7 @@ function setupEventListeners() {
         }
 
         // Populate template selector
-        const templateSelect = document.getElementById('start-from-template-select');
+        var templateSelect = document.getElementById('project-template-select');
         if (templateSelect && typeof populateProjectTemplateSelect === 'function') {
             populateProjectTemplateSelect();
         }
@@ -3951,7 +4007,7 @@ function setupEventListeners() {
         const mode = document.getElementById('project-modal').dataset.mode;
         if (mode === 'new') {
             const duplicateFromId = document.getElementById('duplicate-from-select').value;
-            const templateEl = document.getElementById('start-from-template-select');
+            const templateEl = document.getElementById('project-template-select');
             const templateId = templateEl ? templateEl.value : '';
             if (duplicateFromId) {
                 await duplicateProject(duplicateFromId, name);

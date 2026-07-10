@@ -300,6 +300,11 @@
 
         <!-- Main Canvas Area -->
         <div class="canvas-area" id="canvas-area">
+            <!-- Export reminder banner -->
+            <div id="export-reminder" style="background: rgba(94, 236, 192, 0.1); border: 1px solid rgba(94, 236, 192, 0.25); border-radius: 10px; padding: 10px 16px; margin-bottom: 8px; display: none; align-items: center; justify-content: space-between; font-size: 13px; color: var(--accent);">
+                <span>💾 <strong>Pro tip:</strong> Export your project file regularly to avoid losing changes.</span>
+                <button id="dismiss-reminder" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; font-size: 16px; line-height: 1;">✕</button>
+            </div>
             <div class="preview-strip">
                 <div class="side-preview side-preview-far-left" id="side-preview-far-left">
                     <canvas id="preview-canvas-far-left"></canvas>
@@ -1553,15 +1558,32 @@
                     <option value="">None (empty project)</option>
                 </select>
             </div>
-            <div class="control-group" style="margin: 20px 0; text-align: left;" id="start-from-template-group">
-                <label class="control-label">Start from Template</label>
-                <select id="start-from-template-select" class="control-select">
-                    <option value="">None (start blank)</option>
-                </select>
-            </div>
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-cancel" id="project-modal-cancel">Cancel</button>
                 <button class="modal-btn modal-btn-confirm" id="project-modal-confirm" style="background: var(--accent);">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tutorial Modal (shown on first visit) -->
+    <div class="modal-overlay" id="tutorial-modal">
+        <div class="modal" style="max-width: 500px;">
+            <div class="modal-icon" style="background: rgba(94, 236, 192, 0.15);">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
+                    <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+                </svg>
+            </div>
+            <h3 class="modal-title">Welcome to App Store Screenshots!</h3>
+            <div style="text-align: left; margin: 16px 0; line-height: 1.7; font-size: 14px; color: var(--text-secondary);">
+                <p style="margin-bottom: 14px;"><strong style="color: var(--text-primary);">1. Start a project</strong><br>
+                Import a previously saved project <span style="font-size: 18px;">📂</span> or create a new one <span style="font-size: 18px;">➕</span> from the top-left.</p>
+                <p style="margin-bottom: 14px;"><strong style="color: var(--text-primary);">2. Upload screenshots</strong><br>
+                Drag & drop your app screenshots or click to browse. You can also start from a <strong>template</strong> to get instant styling.</p>
+                <p style="margin-bottom: 14px;"><strong style="color: var(--text-primary);">3. Customize & export</strong><br>
+                Add backgrounds, text, and device frames. Hit <strong>Export</strong> when done — and remember to save your project file regularly!</p>
+            </div>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-confirm" id="tutorial-got-it" style="background: var(--accent); color: var(--bg-primary); font-weight: 700; width: 100%;">Got it!</button>
             </div>
         </div>
     </div>
