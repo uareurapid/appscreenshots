@@ -202,6 +202,9 @@ MIT License - feel free to use, modify, and distribute.
 
 - **iPhone 15 Pro Max 3D Model** by [MajdyModels](https://sketchfab.com/majdymodels) - Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 
+- **iPad Pro 2020 3D Model** by [DatSketch](https://sketchfab.com/DatSketch) - Licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
+
+
 ## Author
 
 Proudly vibe coded by [Stefan](https://github.com/BlackMac) at [YuzuHub](https://yuzuhub.com/en) — building smart AI products from Düsseldorf, Germany.
