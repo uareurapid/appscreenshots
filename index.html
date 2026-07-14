@@ -301,7 +301,7 @@
         <!-- Main Canvas Area -->
         <div class="canvas-area" id="canvas-area">
             <!-- Export reminder banner -->
-            <div id="export-reminder" style="background: rgba(94, 236, 192, 0.1); border: 1px solid rgba(94, 236, 192, 0.25); border-radius: 10px; padding: 10px 16px; margin-bottom: 8px; display: none; align-items: center; justify-content: space-between; font-size: 13px; color: var(--accent);">
+            <div id="export-reminder" style="background: rgba(94, 236, 192, 0.1); border: 1px solid rgba(94, 236, 192, 0.25); border-radius: 10px; padding: 10px 16px; margin-bottom: 4rem; display: none; align-items: center; justify-content: space-between; font-size: 13px; color: var(--accent);">
                 <span>💾 <strong>Pro tip:</strong> Export your project file regularly to avoid losing changes.</span>
                 <button id="dismiss-reminder" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; font-size: 16px; line-height: 1;">✕</button>
             </div>
@@ -498,6 +498,7 @@
                         </div>
                         <input type="file" id="bg-image-input" accept="image/*" hidden>
                         <img class="bg-image-preview" id="bg-image-preview" style="display: none;">
+                        <div class="bg-image-recents" id="bg-image-recents"></div>
                     </div>
                     <div class="control-group">
                         <label class="control-label">Image Fit</label>
@@ -2042,6 +2043,7 @@
     <script src="template-images.js"></script>
     <script src="templates.js"></script>
     <script src="template-ui.js"></script>
+    <script src="panel-resize.js"></script>
     <script src="db-init.js"></script>
     <script src="app.js"></script>
     <script>

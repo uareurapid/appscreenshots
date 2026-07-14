@@ -227,16 +227,16 @@ body.resizing * {
     border: 1px dashed var(--border-color);
     border-radius: 8px;
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--accent);
     font-size: 12px;
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .add-btn:hover {
-    border-color: var(--accent-color);
-    color: var(--accent-color);
-    background: rgba(59, 130, 246, 0.05);
+    border-color: var(--accent);
+    color: var(--accent-hover);
+    background: var(--accent-subtle);
 }
 
 .sidebar-footer {
@@ -424,7 +424,7 @@ body.resizing * {
     height: 28px;
     border: none;
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--accent);
     cursor: pointer;
     border-radius: 6px;
     display: flex;
@@ -434,8 +434,8 @@ body.resizing * {
 }
 
 .screenshot-menu-btn:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
+    background: var(--accent-subtle-strong);
+    color: var(--accent-hover);
 }
 
 .screenshot-menu {
@@ -485,6 +485,7 @@ body.resizing * {
 .screenshot-menu-item svg {
     flex-shrink: 0;
     opacity: 0.7;
+    color: var(--accent);
 }
 
 /* Transfer mode styles */
@@ -537,7 +538,7 @@ body.resizing * {
     align-items: center;
     justify-content: center;
     width: 16px;
-    color: var(--text-secondary);
+    color: var(--accent);
     opacity: 0.4;
     cursor: grab;
     flex-shrink: 0;
@@ -545,6 +546,7 @@ body.resizing * {
 
 .drag-handle:hover {
     opacity: 0.8;
+    color: var(--accent-hover);
 }
 
 .screenshot-item:active .drag-handle {
@@ -929,7 +931,7 @@ input[type="range"]::-webkit-slider-thumb {
 .add-stop-btn:hover {
     border-color: var(--accent);
     color: var(--accent);
-    background: rgba(99, 102, 241, 0.1);
+    background: var(--accent-subtle);
 }
 
 /* Canvas area */
@@ -1115,7 +1117,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .dropdown-arrow {
-    color: var(--text-secondary);
+    color: var(--accent);
     transition: transform 0.2s;
 }
 
@@ -1238,12 +1240,12 @@ input[type="range"]::-webkit-slider-thumb {
 
 .export-btn.secondary {
     background: var(--bg-tertiary);
-    color: var(--text-primary);
+    color: var(--accent);
     padding: 10px;
 }
 
 .export-btn.secondary:hover {
-    background: var(--border-color);
+    background: var(--accent-subtle-strong);
 }
 
 .export-btn svg {
@@ -1868,7 +1870,8 @@ input[type="range"]::-webkit-slider-thumb {
 
 .tab svg {
     opacity: 0.7;
-    transition: opacity 0.2s;
+    color: var(--accent);
+    transition: opacity 0.2s, color 0.2s;
 }
 
 .tab:hover svg {
@@ -1882,6 +1885,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .tab.active svg {
     opacity: 1;
+    color: var(--accent-hover);
 }
 
 .tab-content {
@@ -2266,6 +2270,34 @@ input[type="range"]::-webkit-slider-thumb {
     margin-top: 8px;
 }
 
+/* Recent background images gallery */
+.bg-image-recents {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+
+.bg-image-recent-thumb {
+    width: 60px;
+    height: 60px;
+    border-radius: 6px;
+    object-fit: cover;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.15s;
+}
+
+.bg-image-recent-thumb:hover {
+    border-color: var(--accent);
+    transform: scale(1.05);
+}
+
+.bg-image-recent-thumb.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
 /* Output format selector */
 .format-selector {
     display: flex;
@@ -2414,7 +2446,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .project-dropdown .dropdown-arrow {
-    color: var(--text-secondary);
+    color: var(--accent);
     transition: transform 0.2s;
     flex-shrink: 0;
 }
@@ -2490,7 +2522,7 @@ input[type="range"]::-webkit-slider-thumb {
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    color: var(--text-secondary);
+    color: var(--accent);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2499,8 +2531,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .project-btn:hover {
-    background: var(--bg-primary);
-    color: var(--text-primary);
+    background: var(--accent-subtle-strong);
+    color: var(--accent-hover);
     border-color: var(--accent);
 }
 
@@ -2527,7 +2559,7 @@ input[type="range"]::-webkit-slider-thumb {
     border: none;
     border-radius: 8px;
     background: var(--bg-tertiary);
-    color: var(--text-secondary);
+    color: var(--accent);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2536,8 +2568,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .settings-btn:hover {
-    background: var(--bg-primary);
-    color: var(--text-primary);
+    background: var(--accent-subtle-strong);
+    color: var(--accent-hover);
 }
 
 .sidebar-header-buttons {
@@ -2637,7 +2669,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .language-btn:hover {
-    background: var(--bg-primary);
+    background: var(--accent-subtle-strong);
 }
 
 .language-btn-flag {
@@ -3178,7 +3210,7 @@ input[type="range"]::-webkit-slider-thumb {
     background: var(--bg-tertiary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    color: var(--text-primary);
+    color: var(--accent);
     font-size: 12px;
     cursor: pointer;
     transition: all 0.15s;
@@ -3291,19 +3323,20 @@ input[type="range"]::-webkit-slider-thumb {
     justify-content: center;
     border: none;
     background: none;
-    color: var(--text-secondary);
+    color: var(--accent);
     cursor: pointer;
     border-radius: 4px;
     padding: 0;
 }
 
 .element-item-btn:hover {
-    background: var(--bg-secondary);
-    color: var(--text-primary);
+    background: var(--accent-subtle-strong);
+    color: var(--accent-hover);
 }
 
 .element-item-btn.danger:hover {
     color: #ff453a;
+    background: rgba(255, 69, 58, 0.15);
 }
 
 .element-properties {

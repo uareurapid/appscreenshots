@@ -1589,12 +1589,13 @@ function saveState() {
             src: s.image?.src || '', // Legacy compatibility
             name: s.name,
             deviceType: s.deviceType,
+            templateId: s.templateId || null,
             localizedImages: localizedImages,
             // Strip non-clonable Image objects from background before DB write.
-            // String URLs (from URL-based templates) and _overlayUrl/_pendingImageUrl
-            // are safe to persist — only HTMLImageElement instances must be removed.
+            // Save the src as _bgImageSrc so it survives export/re-import.
             background: Object.assign({}, s.background, {
-                image: s.background.image instanceof HTMLImageElement ? undefined : s.background.image
+                image: s.background.image instanceof HTMLImageElement ? undefined : s.background.image,
+                _bgImageSrc: (s.background.image instanceof HTMLImageElement && s.background.image.src) ? s.background.image.src : (s.background._bgImageSrc || undefined)
             }),
             screenshot: s.screenshot,
             text: s.text,
@@ -1747,6 +1748,7 @@ function loadState() {
                                     image: null,
                                     name: s.name || 'Blank Screen',
                                     deviceType: s.deviceType,
+                                    templateId: s.templateId || null,
                                     localizedImages: {},
                                     background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
                                     screenshot: screenshotSettings,
@@ -1786,6 +1788,7 @@ function loadState() {
                                                     image: localizedImages[firstLang]?.image, // Legacy compat
                                                     name: s.name,
                                                     deviceType: s.deviceType,
+                                                    templateId: s.templateId || null,
                                                     localizedImages: localizedImages,
                                                     background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
                                                     screenshot: screenshotSettings,
@@ -1831,6 +1834,7 @@ function loadState() {
                                         image: img,
                                         name: s.name,
                                         deviceType: s.deviceType,
+                                        templateId: s.templateId || null,
                                         localizedImages: localizedImages,
                                         background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
                                         screenshot: screenshotSettings,
@@ -1849,23 +1853,38 @@ function loadState() {
                         function checkAllLoaded() {
                             if (loadedCount === totalToLoad) {
                                 // Reconstruct background Image objects from persisted
-                                // URLs (_overlayUrl, _pendingImageUrl, or string image)
-                                // that were stripped during saveState to avoid DataCloneError.
+                                // URLs (_overlayUrl, _pendingImageUrl, string image,
+                                // or _bgImageSrc) that were stripped during saveState
+                                // to avoid DataCloneError.
+                                var pendingBgLoads = 0;
+                                var bgLoadDone = function() {
+                                    pendingBgLoads--;
+                                    if (pendingBgLoads === 0 && typeof updateCanvas === 'function') {
+                                        updateCanvas();
+                                        if (typeof updateScreenshotList === 'function') updateScreenshotList();
+                                    }
+                                };
                                 state.screenshots.forEach(function(ss) {
-                                    if (!ss.background) return;
-                                    var url = ss.background._overlayUrl || ss.background._pendingImageUrl;
+                                    if (!ss || !ss.background) return;
+                                    var url = ss.background._overlayUrl ||
+                                              ss.background._pendingImageUrl ||
+                                              ss.background._bgImageSrc;
                                     // Also handle templates that stored image as a URL string
                                     if (!url && typeof ss.background.image === 'string') {
                                         url = ss.background.image;
                                     }
                                     if (url && !(ss.background.image instanceof HTMLImageElement)) {
+                                        pendingBgLoads++;
                                         var bgImg = new Image();
                                         bgImg.onload = function() {
                                             ss.background.image = bgImg;
+                                            bgLoadDone();
                                         };
+                                        bgImg.onerror = function() { bgLoadDone(); };
                                         bgImg.src = url;
                                     }
                                 });
+                                // Always update UI immediately — do not gate on bg loads
                                 updateScreenshotList();
                                 syncUIWithState();
                                 updateGradientStopsUI();
@@ -1874,6 +1893,10 @@ function loadState() {
                                 if (needsMigration && parsed.screenshots.length > 0) {
                                     showMigrationPrompt();
                                 }
+
+                                // Resolve AFTER checkAllLoaded completes, so
+                                // switchProject sees the full screenshot list.
+                                resolve();
                             }
                         }
                     } else {
@@ -1882,6 +1905,7 @@ function loadState() {
                         syncUIWithState();
                         updateGradientStopsUI();
                         updateCanvas();
+                        resolve();
                     }
 
                     state.selectedIndex = parsed.selectedIndex || 0;
@@ -2267,32 +2291,66 @@ function duplicateScreenshot(index) {
     const original = state.screenshots[index];
     if (!original) return;
 
+    // Deep-clone serializable fields
     const clone = JSON.parse(JSON.stringify({
         name: original.name,
         deviceType: original.deviceType,
-        background: original.background,
+        background: Object.assign({}, original.background, { image: undefined }),
         screenshot: original.screenshot,
         text: original.text,
-        overrides: original.overrides
+        templateId: original.templateId || null,
+        overrides: original.overrides,
+        elements: (original.elements || []).map(function(el) {
+            var c = JSON.parse(JSON.stringify(el));
+            c.image = undefined;
+            return c;
+        }),
+        popouts: original.popouts || []
     }));
 
-    const nameParts = clone.name.split('.');
+    var nameParts = clone.name.split('.');
     if (nameParts.length > 1) {
-        const ext = nameParts.pop();
+        var ext = nameParts.pop();
         clone.name = nameParts.join('.') + ' (Copy).' + ext;
     } else {
         clone.name = clone.name + ' (Copy)';
     }
 
+    // Reconstruct background image if the original had one
+    var origBg = original.background;
+    if (origBg && origBg.image) {
+        var bgImgSrc = typeof origBg.image === 'string' ? origBg.image : (origBg.image.src || '');
+        if (bgImgSrc) {
+            var bgImg = new Image();
+            bgImg.src = bgImgSrc;
+            clone.background.image = bgImg;
+        }
+    }
+    // Also copy _overlayUrl for template-generated backgrounds
+    if (origBg && origBg._overlayUrl) {
+        clone.background._overlayUrl = origBg._overlayUrl;
+    }
+
+    // Reconstruct element images
+    if (original.elements) {
+        original.elements.forEach(function(el, i) {
+            if ((el.type === 'graphic' || el.type === 'icon') && el.image && el.image.src) {
+                var img = new Image();
+                img.src = el.image.src;
+                clone.elements[i].image = img;
+            }
+        });
+    }
+
     clone.localizedImages = {};
     if (original.localizedImages) {
-        Object.keys(original.localizedImages).forEach(lang => {
-            const langData = original.localizedImages[lang];
-            if (langData?.src) {
-                const img = new Image();
-                img.src = langData.src;
+        Object.keys(original.localizedImages).forEach(function(lang) {
+            var langData = original.localizedImages[lang];
+            if (langData && langData.src) {
+                var langImg = new Image();
+                langImg.src = langData.src;
                 clone.localizedImages[lang] = {
-                    image: img,
+                    image: langImg,
                     src: langData.src,
                     name: langData.name
                 };
@@ -2300,10 +2358,10 @@ function duplicateScreenshot(index) {
         });
     }
 
-    if (original.image?.src) {
-        const img = new Image();
-        img.src = original.image.src;
-        clone.image = img;
+    if (original.image && original.image.src) {
+        var legacyImg = new Image();
+        legacyImg.src = original.image.src;
+        clone.image = legacyImg;
     }
 
     state.screenshots.splice(index + 1, 0, clone);
@@ -2416,6 +2474,22 @@ function syncUIWithState() {
     document.getElementById('bg-overlay-hex').value = bg.overlayColor || '#000000';
     document.getElementById('bg-overlay-opacity').value = bg.overlayOpacity || 0;
     document.getElementById('bg-overlay-opacity-value').textContent = formatValue(bg.overlayOpacity || 0) + '%';
+
+    // Sync bg preview with current screenshot's image
+    var preview = document.getElementById('bg-image-preview');
+    if (preview) {
+        var bgImg = bg.image;
+        if (bgImg && bgImg.src) {
+            preview.src = bgImg.src;
+            preview.style.display = 'block';
+        } else if (typeof bgImg === 'string') {
+            preview.src = bgImg;
+            preview.style.display = 'block';
+        } else {
+            preview.style.display = 'none';
+        }
+    }
+    renderBgImageRecents();
 
     // Noise
     document.getElementById('noise-toggle').classList.toggle('active', bg.noise);
@@ -4520,14 +4594,17 @@ function setupEventListeners() {
         if (e.target.files[0]) {
             const reader = new FileReader();
             reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
+                var dataUrl = event.target.result;
+                var img = new Image();
+                img.onload = function() {
                     setBackground('image', img);
-                    document.getElementById('bg-image-preview').src = event.target.result;
-                    document.getElementById('bg-image-preview').style.display = 'block';
+                    var preview = document.getElementById('bg-image-preview');
+                    if (preview) { preview.src = dataUrl; preview.style.display = 'block'; }
+                    addBgToRecentCache(dataUrl);
+                    renderBgImageRecents();
                     updateCanvas();
                 };
-                img.src = event.target.result;
+                img.src = dataUrl;
             };
             reader.readAsDataURL(e.target.files[0]);
         }
@@ -7441,6 +7518,47 @@ function drawBackgroundToContext(context, dims, bg) {
             context.globalAlpha = 1;
         }
     }
+}
+
+// ─── Background Image Upload Cache ───
+// Stores data URLs of uploaded background images so they can be reused
+// across different screenshots without re-uploading.
+var _bgUploadCache = [];
+
+function addBgToRecentCache(dataUrl) {
+    // Avoid duplicates
+    if (_bgUploadCache.indexOf(dataUrl) === -1) {
+        _bgUploadCache.unshift(dataUrl);
+        // Keep max 12 recent images
+        if (_bgUploadCache.length > 12) _bgUploadCache.length = 12;
+    }
+}
+
+function renderBgImageRecents() {
+    var container = document.getElementById('bg-image-recents');
+    if (!container) return;
+    container.innerHTML = '';
+    if (_bgUploadCache.length === 0) return;
+
+    _bgUploadCache.forEach(function(dataUrl) {
+        var thumb = document.createElement('img');
+        thumb.className = 'bg-image-recent-thumb';
+        thumb.src = dataUrl;
+        thumb.title = 'Use this background image';
+        thumb.addEventListener('click', function() {
+            var img = new Image();
+            img.onload = function() {
+                setBackground('image', img);
+                var preview = document.getElementById('bg-image-preview');
+                if (preview) { preview.src = dataUrl; preview.style.display = 'block'; }
+                document.querySelectorAll('.bg-image-recent-thumb').forEach(function(t) { t.classList.remove('active'); });
+                thumb.classList.add('active');
+                updateCanvas();
+            };
+            img.src = dataUrl;
+        });
+        container.appendChild(thumb);
+    });
 }
 
 // Reusable offscreen canvas for noise generation, flagged for frequent readback.

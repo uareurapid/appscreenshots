@@ -6,12 +6,18 @@
     // Panel resize
     var leftHandle = document.getElementById('resize-handle-left');
     var rightHandle = document.getElementById('resize-handle-right');
-    var leftWidth = 320, rightWidth = 340;
-    var minWidth = 200, maxWidth = 500;
+    var leftWidth = parseInt(localStorage.getItem('panelLeftWidth')) || 320;
+    var rightWidth = parseInt(localStorage.getItem('panelRightWidth')) || 340;
+    var minWidth = 180, maxWidth = 700;
 
     function updateColumns() {
         container.style.setProperty('--panel-left-width', leftWidth + 'px');
         container.style.setProperty('--panel-right-width', rightWidth + 'px');
+    }
+
+    function saveWidths() {
+        localStorage.setItem('panelLeftWidth', leftWidth);
+        localStorage.setItem('panelRightWidth', rightWidth);
     }
 
     function makeResizable(handle, side, getWidth, setWidth, getMin, getMax) {
@@ -33,6 +39,7 @@
                 handle.classList.remove('active');
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
+                saveWidths();
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
             }
