@@ -72,8 +72,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
-    <!-- ASO Auth Gate — blocks UI until token is verified -->
-    <div id="auth-gate" style="position: fixed; inset: 0; z-index: 99999; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 20px;">
+    <!-- ASO Auth Gate — semi-transparent overlay, app visible behind -->
+    <div id="auth-gate" style="position: fixed; inset: 0; z-index: 99999; background: rgba(14, 15, 17, 0.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 20px;">
         <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" style="opacity: 0.5;">
             <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
         </svg>

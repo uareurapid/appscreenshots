@@ -1508,21 +1508,18 @@ function updateProjectSelector() {
 
 // ── ASO Auth ──
 // Verifies that the user has a valid token from ASO Analytics.
-// Token is passed via ?token= in the URL (from the ASO dashboard link)
-// and stored in localStorage for subsequent visits.
-async function verifyAsoToken() {
+// Token is a JWT passed via ?token= in the URL and stored in localStorage.
+// Verified client-side (decode + check expiry) — no CORS-prone server call.
+function verifyAsoToken() {
     var params = new URLSearchParams(window.location.search);
     var urlToken = params.get('token');
 
     if (urlToken) {
-        var result = await validateToken(urlToken);
-        if (result.valid) {
+        // Fresh token from URL — decode and verify locally
+        var user = decodeTokenPayload(urlToken);
+        if (user) {
             localStorage.setItem('aso_token', urlToken);
-            localStorage.setItem('aso_user', JSON.stringify({
-                user_id: result.user_id,
-                email: result.email,
-                name: result.name
-            }));
+            localStorage.setItem('aso_user', JSON.stringify(user));
             var cleanUrl = window.location.origin + window.location.pathname;
             window.history.replaceState({}, document.title, cleanUrl);
             return true;
@@ -1532,34 +1529,48 @@ async function verifyAsoToken() {
         return false;
     }
 
+    // No URL token — check localStorage
     var storedToken = localStorage.getItem('aso_token');
     if (storedToken) {
-        var result = await validateToken(storedToken);
-        if (result.valid) {
+        var user = decodeTokenPayload(storedToken);
+        if (user) {
             return true;
         }
         localStorage.removeItem('aso_token');
         localStorage.removeItem('aso_user');
-        return false;
     }
 
     return false;
 }
 
-async function validateToken(token) {
+// Decode a JWT payload without verifying the signature (client-side only).
+// Checks the `exp` field and returns { user_id, email, name } if valid.
+function decodeTokenPayload(token) {
     try {
-        var resp = await fetch('https://aso.cristomade.it/api/verify-token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: token })
-        });
-        return await resp.json();
-    } catch (e) {
-        console.warn('ASO auth check failed (network):', e.message);
-        if (localStorage.getItem('aso_token')) {
-            return { valid: true };
+        var parts = token.split('.');
+        if (parts.length !== 3) return null;
+
+        // Decode the payload (second part) from base64url
+        var payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        // Pad for atob
+        while (payload.length % 4) payload += '=';
+        var json = JSON.parse(atob(payload));
+
+        // Check expiry
+        var now = Math.floor(Date.now() / 1000);
+        if (json.exp && json.exp < now) {
+            console.warn('ASO token expired');
+            return null;
         }
-        return { valid: false };
+
+        return {
+            user_id: json.user_id,
+            email: json.email,
+            name: json.name || ''
+        };
+    } catch (e) {
+        console.warn('Invalid ASO token:', e.message);
+        return null;
     }
 }
 
@@ -1568,7 +1579,7 @@ async function init() {
     // ── ASO Auth Gate ──
     // Verify the user token before loading the app. If not a valid ASO user,
     // show the gate screen and don't load anything.
-    var verified = await verifyAsoToken();
+    var verified = verifyAsoToken();
     if (!verified) {
         var gate = document.getElementById('auth-gate');
         if (gate) gate.style.display = 'flex';
