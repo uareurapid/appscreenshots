@@ -72,6 +72,21 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
+    <!-- ASO Auth Gate — blocks UI until token is verified -->
+    <div id="auth-gate" style="position: fixed; inset: 0; z-index: 99999; background: var(--bg-primary); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 20px;">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" style="opacity: 0.5;">
+            <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+        <h2 style="font-size: 22px; font-weight: 600; color: var(--text-primary); text-align: center;">ASO Analytics Users Only</h2>
+        <p style="color: var(--text-secondary); text-align: center; max-width: 360px; font-size: 14px; line-height: 1.6;">
+            This tool is exclusive to registered ASO Analytics users.<br>
+            Log in to your account and click <strong>"Screenshots Generator"</strong> from the dashboard.
+        </p>
+        <a href="https://aso.cristomade.it/login" id="auth-gate-btn" style="display: inline-flex; align-items: center; gap: 8px; background: var(--accent); color: var(--bg-primary); font-weight: 700; font-size: 15px; padding: 14px 28px; border-radius: 999px; text-decoration: none; transition: all 0.2s; box-shadow: 0 0 32px rgba(94,236,192,0.25);">
+            Go to ASO Analytics →
+        </a>
+        <p id="auth-gate-status" style="color: var(--text-muted); font-size: 12px; display: none;"></p>
+    </div>
     <div class="app-container">
         <!-- Left Sidebar - Screenshots -->
         <div class="sidebar" id="sidebar-left">
