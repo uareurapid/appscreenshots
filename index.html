@@ -534,6 +534,21 @@
                 <div class="divider"></div>
 
                 <div class="control-group">
+                    <label class="control-label">Scenic Decor</label>
+                    <p class="hint-text" style="margin-bottom: 8px;">Add an atmospheric overlay to your background</p>
+                    <div class="scenic-decor-grid" id="scenic-decor-grid">
+                        <div class="scenic-decor-item" data-scenic="" title="None">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 6L6 18M6 6l12 12"/>
+                            </svg>
+                            <span>None</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="control-group">
                     <div class="toggle-row collapsible collapsed" data-target="noise-options">
                         <span class="toggle-label">
                             <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1061,6 +1076,21 @@
                         </svg>
                         Icon
                     </button>
+                    <button class="add-element-btn" id="add-badge-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                        Badge
+                    </button>
+                    <button class="add-element-btn" id="add-overlay-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="3" width="7" height="7"/>
+                            <rect x="14" y="3" width="7" height="7"/>
+                            <rect x="8" y="10" width="8" height="5" rx="1"/>
+                            <path d="M8 15l-2 3h12l-2-3"/>
+                        </svg>
+                        Overlay
+                    </button>
                     <input type="file" id="element-graphic-input" accept="image/*" hidden>
                 </div>
 
@@ -1097,9 +1127,51 @@
                     </div>
                     <div class="inline-picker-categories" id="icon-categories">
                         <button class="picker-cat active" data-category="popular">Popular</button>
+                        <button class="picker-cat" data-category="health">💪 Health</button>
+                        <button class="picker-cat" data-category="finance">💳 Finance</button>
+                        <button class="picker-cat" data-category="gaming">🎮 Gaming</button>
+                        <button class="picker-cat" data-category="food">🍕 Food</button>
+                        <button class="picker-cat" data-category="dating">❤️ Dating</button>
+                        <button class="picker-cat" data-category="productivity">✅ Productivity</button>
+                        <button class="picker-cat" data-category="photo">📸 Photo</button>
                         <button class="picker-cat" data-category="all">All</button>
                     </div>
                     <div class="inline-picker-grid icon-grid" id="icon-grid"></div>
+                </div>
+
+                <!-- Inline Badge Picker Dropdown -->
+                <div class="inline-picker" id="badge-picker" style="display: none;">
+                    <div class="inline-picker-search">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                        <input type="text" id="badge-search" placeholder="Search badges..." autocomplete="off">
+                    </div>
+                    <div class="inline-picker-categories" id="badge-categories">
+                        <button class="picker-cat active" data-category="all">All</button>
+                        <button class="picker-cat" data-category="ribbon">Ribbons</button>
+                        <button class="picker-cat" data-category="starburst">Starbursts</button>
+                        <button class="picker-cat" data-category="rating">Ratings</button>
+                        <button class="picker-cat" data-category="medal">Medals</button>
+                        <button class="picker-cat" data-category="shield">Shields</button>
+                        <button class="picker-cat" data-category="tag">Tags</button>
+                    </div>
+                    <div class="inline-picker-grid badge-grid" id="badge-grid"></div>
+                </div>
+
+                <!-- Inline Overlay Picker Dropdown -->
+                <div class="inline-picker" id="overlay-picker" style="display: none;">
+                    <div class="inline-picker-categories" id="overlay-categories">
+                        <button class="picker-cat active" data-category="all">All</button>
+                        <button class="picker-cat" data-category="chat">Chat</button>
+                        <button class="picker-cat" data-category="notification">Notifications</button>
+                        <button class="picker-cat" data-category="card">Cards</button>
+                        <button class="picker-cat" data-category="check">Security</button>
+                        <button class="picker-cat" data-category="rating">Trust</button>
+                        <button class="picker-cat" data-category="social">Social Proof</button>
+                    </div>
+                    <div class="inline-picker-grid overlay-grid" id="overlay-grid"></div>
                 </div>
 
                 <div class="elements-list" id="elements-list">
@@ -1228,6 +1300,14 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Badge / Overlay properties -->
+                    <div id="element-badge-properties" style="display: none;">
+                        <div class="divider"></div>
+                        <div id="element-badge-text-fields"></div>
+                        <div class="divider"></div>
+                        <div id="element-badge-color-fields"></div>
                     </div>
 
                     <!-- Text element properties -->
@@ -2044,6 +2124,7 @@
     <script src="templates.js"></script>
     <script src="template-ui.js"></script>
     <script src="panel-resize.js"></script>
+    <script src="element-presets.js"></script>
     <script src="db-init.js"></script>
     <script src="app.js"></script>
     <script>

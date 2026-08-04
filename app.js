@@ -123,6 +123,38 @@ function getBackground() {
     return screenshot ? screenshot.background : state.defaults.background;
 }
 
+// ─── Scenic Decor Cache ───
+var _scenicCache = {};
+
+function initScenicDecor() {
+    const grid = document.getElementById('scenic-decor-grid');
+    if (!grid || typeof scenicOverlays === 'undefined') return;
+
+    // Populate grid with scenic options
+    scenicOverlays.forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'scenic-decor-item';
+        item.dataset.scenic = s.id;
+        item.title = s.name;
+        item.innerHTML = `<div class="scenic-thumb">${s.svg}</div><span>${s.name}</span>`;
+        grid.appendChild(item);
+
+        // Preload as image
+        svgToImage(s.svg).then(img => {
+            _scenicCache[s.id] = { img, opacity: s.overlayOpacity || 30 };
+        });
+
+        // Click handler
+        item.addEventListener('click', () => {
+            document.querySelectorAll('.scenic-decor-item').forEach(el => el.classList.remove('selected'));
+            item.classList.add('selected');
+            const bg = getBackground();
+            bg._scenicOverlay = item.classList.contains('selected') ? s.id : 'none';
+            updateCanvas();
+        });
+    });
+}
+
 function getScreenshotSettings() {
     const screenshot = getCurrentScreenshot();
     return screenshot ? screenshot.screenshot : state.defaults.screenshot;
@@ -496,6 +528,72 @@ function deleteElement(id) {
     if (!screenshot || !screenshot.elements) return;
     screenshot.elements = screenshot.elements.filter(e => e.id !== id);
     if (selectedElementId === id) selectedElementId = null;
+    updateCanvas();
+    updateElementsList();
+    updateElementProperties();
+}
+
+// ===== Badge Element =====
+async function addBadgeElement(badgePreset) {
+    const screenshot = getCurrentScreenshot();
+    if (!screenshot) return;
+    if (!screenshot.elements) screenshot.elements = [];
+    const badgeTexts = typeof getDefaultTexts === 'function' ? getDefaultTexts(badgePreset) : {};
+    const badgeColors = typeof getDefaultColors === 'function' ? getDefaultColors(badgePreset) : {};
+    const img = typeof generatePresetImage === 'function'
+        ? await generatePresetImage(badgePreset, badgeTexts, badgeColors)
+        : await svgToImage(badgePreset.svg);
+    const el = {
+        id: crypto.randomUUID(),
+        type: 'badge',
+        presetId: badgePreset.id,
+        name: badgePreset.name,
+        x: 15, y: 12,
+        width: badgePreset.defaultWidth || 25,
+        rotation: -8,
+        opacity: 100,
+        layer: 'above-text',
+        image: img,
+        badgeTexts: badgeTexts,
+        badgeColors: badgeColors,
+        iconColor: '#ffffff',
+        iconStrokeWidth: 2,
+        iconShadow: { enabled: false, color: '#000000', blur: 20, opacity: 40, x: 0, y: 10 }
+    };
+    screenshot.elements.push(el);
+    selectedElementId = el.id;
+    updateCanvas();
+    updateElementsList();
+    updateElementProperties();
+}
+
+// ===== Overlay Element =====
+async function addOverlayElement(preset) {
+    const screenshot = getCurrentScreenshot();
+    if (!screenshot) return;
+    if (!screenshot.elements) screenshot.elements = [];
+    const badgeTexts = typeof getDefaultTexts === 'function' ? getDefaultTexts(preset) : {};
+    const badgeColors = typeof getDefaultColors === 'function' ? getDefaultColors(preset) : {};
+    const img = typeof generatePresetImage === 'function'
+        ? await generatePresetImage(preset, badgeTexts, badgeColors)
+        : await svgToImage(preset.svg);
+    const el = {
+        id: crypto.randomUUID(),
+        type: 'overlay',
+        presetId: preset.id,
+        name: preset.name,
+        x: 85, y: 65,
+        width: preset.defaultWidth || 25,
+        rotation: 0,
+        opacity: 100,
+        layer: 'above-screenshot',
+        image: img,
+        iconColor: '#ffffff',
+        iconStrokeWidth: 2,
+        iconShadow: { enabled: false, color: '#000000', blur: 20, opacity: 40, x: 0, y: 10 }
+    };
+    screenshot.elements.push(el);
+    selectedElementId = el.id;
     updateCanvas();
     updateElementsList();
     updateElementProperties();
@@ -1656,7 +1754,7 @@ function migrate3DPosition(screenshotSettings) {
     screenshotSettings.y = Math.max(0, Math.min(100, 50 + (oldY - 50) * yFactor));
 }
 
-// Reconstruct Image objects for graphic/icon elements from saved data
+// Reconstruct Image objects for graphic/icon/badge/overlay elements from saved data
 function reconstructElementImages(elements) {
     if (!elements || !Array.isArray(elements)) return [];
     return elements.map(el => {
@@ -1673,6 +1771,19 @@ function reconstructElementImages(elements) {
                     updateCanvas();
                 })
                 .catch(e => console.error('Failed to reconstruct icon:', e));
+        } else if ((el.type === 'badge' || el.type === 'overlay') && el.presetId) {
+            // Regenerate image from preset data (blob URLs don't survive refresh)
+            setTimeout(async () => {
+                if (typeof regeneratePresetImage === 'function') {
+                    await regeneratePresetImage(restored);
+                } else if (typeof getPresetById === 'function' && typeof generatePresetImage === 'function') {
+                    const preset = getPresetById(el.presetId);
+                    if (preset) {
+                        restored.image = await generatePresetImage(preset, restored.badgeTexts || {}, restored.badgeColors || {});
+                    }
+                }
+                updateCanvas();
+            }, 50);
         }
         return restored;
     });
@@ -2339,6 +2450,22 @@ function duplicateScreenshot(index) {
                 img.src = el.image.src;
                 clone.elements[i].image = img;
             }
+            // Badge/overlay: regenerate image from preset data (blob URLs don't survive refresh)
+            if ((el.type === 'badge' || el.type === 'overlay') && el.presetId) {
+                (function(idx, element) {
+                    setTimeout(async function() {
+                        if (typeof regeneratePresetImage === 'function') {
+                            await regeneratePresetImage(element);
+                        } else if (typeof getPresetById === 'function' && typeof generatePresetImage === 'function') {
+                            var preset = getPresetById(element.presetId);
+                            if (preset) {
+                                element.image = await generatePresetImage(preset, element.badgeTexts || {}, element.badgeColors || {});
+                            }
+                        }
+                        if (typeof updateCanvas === 'function') updateCanvas();
+                    }, 100 + idx * 50);
+                })(i, clone.elements[i]);
+            }
         });
     }
 
@@ -2662,6 +2789,10 @@ function updateElementsList() {
         let thumbContent;
         if (el.type === 'graphic' && el.image) {
             thumbContent = `<img src="${el.image.src}" alt="${el.name}">`;
+        } else if (el.type === 'badge' && el.image) {
+            thumbContent = `<div class="badge-thumb"><img src="${el.image.src}" alt="${el.name}"></div>`;
+        } else if (el.type === 'overlay' && el.image) {
+            thumbContent = `<div class="overlay-thumb"><img src="${el.image.src}" alt="${el.name}"></div>`;
         } else if (el.type === 'emoji') {
             thumbContent = `<span class="emoji-thumb">${el.emoji}</span>`;
         } else if (el.type === 'icon' && el.image) {
@@ -2731,7 +2862,7 @@ function updateElementProperties() {
     }
 
     propsEl.style.display = '';
-    const titleMap = { text: 'Text Element', emoji: `${el.emoji} Emoji`, icon: `Icon: ${el.name}`, graphic: el.name || 'Graphic' };
+    const titleMap = { text: 'Text Element', emoji: `${el.emoji} Emoji`, icon: `Icon: ${el.name}`, graphic: el.name || 'Graphic', badge: `Badge: ${el.name}`, overlay: `Overlay: ${el.name}` };
     document.getElementById('element-properties-title').textContent = titleMap[el.type] || el.name || 'Element';
 
     document.getElementById('element-layer').value = el.layer;
@@ -2749,10 +2880,12 @@ function updateElementProperties() {
     // Type-specific properties
     const textProps = document.getElementById('element-text-properties');
     const iconProps = document.getElementById('element-icon-properties');
+    const badgeProps = document.getElementById('element-badge-properties');
 
     // Hide all type-specific panels first
     textProps.style.display = 'none';
     if (iconProps) iconProps.style.display = 'none';
+    if (badgeProps) badgeProps.style.display = 'none';
 
     if (el.type === 'text') {
         textProps.style.display = '';
@@ -2796,7 +2929,97 @@ function updateElementProperties() {
         document.getElementById('element-icon-shadow-x-value').textContent = shadow.x + 'px';
         document.getElementById('element-icon-shadow-y').value = shadow.y;
         document.getElementById('element-icon-shadow-y-value').textContent = shadow.y + 'px';
+    } else if ((el.type === 'badge' || el.type === 'overlay') && badgeProps) {
+        badgeProps.style.display = '';
+        renderBadgeProperties(el);
     }
+}
+
+// ─── Badge/Overlay Properties Rendering ───
+function renderBadgeProperties(el) {
+    const preset = typeof getPresetById === 'function' ? getPresetById(el.presetId) : null;
+    if (!preset) return;
+
+    // Ensure badgeTexts and badgeColors exist
+    if (!el.badgeTexts) el.badgeTexts = typeof getDefaultTexts === 'function' ? getDefaultTexts(preset) : {};
+    if (!el.badgeColors) el.badgeColors = typeof getDefaultColors === 'function' ? getDefaultColors(preset) : {};
+
+    const textFieldsEl = document.getElementById('element-badge-text-fields');
+    const colorFieldsEl = document.getElementById('element-badge-color-fields');
+
+    // ─── Text Fields ───
+    if (textFieldsEl) {
+        const textKeys = Object.keys(preset.textFields || {});
+        if (textKeys.length > 0) {
+            let html = '<label class="control-label">Text</label>';
+            textKeys.forEach((key, i) => {
+                const val = el.badgeTexts[key] || preset.textFields[key] || '';
+                html += `<div class="control-group">
+                    <input type="text" class="badge-text-input" data-badge-key="${key}" value="${escapeHtml(val)}" placeholder="${preset.textFields[key] || ''}" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;padding:6px 8px;color:var(--text-primary);font-size:12px;">
+                </div>`;
+            });
+            textFieldsEl.innerHTML = html;
+            textFieldsEl.style.display = '';
+        } else {
+            textFieldsEl.style.display = 'none';
+        }
+    }
+
+    // ─── Color Fields ───
+    if (colorFieldsEl) {
+        const colorKeys = Object.keys(preset.colorFields || {});
+        if (colorKeys.length > 0) {
+            let html = '<label class="control-label">Colors</label>';
+            colorKeys.forEach(key => {
+                const val = el.badgeColors[key] || preset.colorFields[key] || '#ffffff';
+                const label = key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
+                html += `<div class="control-group" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                    <span style="font-size:11px;color:var(--text-secondary);min-width:70px;">${label}</span>
+                    <div class="color-input-wrapper" style="flex:1;">
+                        <input type="color" class="badge-color-input" data-badge-color="${key}" value="${val}" style="width:28px;height:28px;border:none;border-radius:4px;cursor:pointer;">
+                        <input type="text" class="badge-color-hex" data-badge-color="${key}" value="${val}" style="width:70px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:4px;padding:4px 6px;color:var(--text-primary);font-size:11px;">
+                    </div>
+                </div>`;
+            });
+            colorFieldsEl.innerHTML = html;
+            colorFieldsEl.style.display = '';
+        } else {
+            colorFieldsEl.style.display = 'none';
+        }
+    }
+
+    // Wire up change handlers (do this once)
+    if (!window._badgePropsWired) {
+        window._badgePropsWired = true;
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('badge-text-input')) {
+                const el = getSelectedElement();
+                if (!el || !el.badgeTexts) return;
+                el.badgeTexts[e.target.dataset.badgeKey] = e.target.value;
+                if (typeof regeneratePresetImage === 'function') regeneratePresetImage(el);
+            }
+            if (e.target.classList.contains('badge-color-input') || e.target.classList.contains('badge-color-hex')) {
+                const el = getSelectedElement();
+                if (!el || !el.badgeColors) return;
+                const key = e.target.dataset.badgeColor;
+                const val = e.target.value;
+                el.badgeColors[key] = val;
+                // Sync color picker <-> hex input
+                if (e.target.classList.contains('badge-color-input')) {
+                    const hex = document.querySelector('.badge-color-hex[data-badge-color="'+key+'"]');
+                    if (hex) hex.value = val;
+                } else if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+                    const color = document.querySelector('.badge-color-input[data-badge-color="'+key+'"]');
+                    if (color) color.value = val;
+                }
+                if (typeof regeneratePresetImage === 'function') regeneratePresetImage(el);
+            }
+        });
+    }
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function setupElementEventListeners() {
@@ -2837,6 +3060,18 @@ function setupElementEventListeners() {
     const addIconBtn = document.getElementById('add-icon-btn');
     if (addIconBtn) {
         addIconBtn.addEventListener('click', () => showIconPicker());
+    }
+
+    // Add Badge button
+    const addBadgeBtn = document.getElementById('add-badge-btn');
+    if (addBadgeBtn) {
+        addBadgeBtn.addEventListener('click', () => showBadgePicker());
+    }
+
+    // Add Overlay button
+    const addOverlayBtn = document.getElementById('add-overlay-btn');
+    if (addOverlayBtn) {
+        addOverlayBtn.addEventListener('click', () => showOverlayPicker());
     }
 
     // Icon color picker
@@ -4654,6 +4889,9 @@ function setupEventListeners() {
         document.getElementById('noise-intensity-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
     });
+
+    // ─── Scenic Decor Overlay ───
+    initScenicDecor();
 
     // Screenshot settings
     document.getElementById('screenshot-scale').addEventListener('input', (e) => {
@@ -7878,6 +8116,51 @@ function drawElementsToContext(context, dims, elements, layer) {
             const aspect = el.image.height / el.image.width;
             const elHeight = elWidth * aspect;
             context.drawImage(el.image, -elWidth / 2, -elHeight / 2, elWidth, elHeight);
+        } else if (el.type === 'badge' && el.image) {
+            // Badges are rendered as images (same as graphics but with shadow support)
+            if (el.iconShadow?.enabled) {
+                const s = el.iconShadow;
+                const hex = s.color || '#000000';
+                const r = parseInt(hex.slice(1,3), 16);
+                const g = parseInt(hex.slice(3,5), 16);
+                const b = parseInt(hex.slice(5,7), 16);
+                context.shadowColor = `rgba(${r},${g},${b},${(s.opacity || 0) / 100})`;
+                context.shadowBlur = s.blur || 0;
+                context.shadowOffsetX = s.x || 0;
+                context.shadowOffsetY = s.y || 0;
+            }
+            const aspect = el.image.height / el.image.width;
+            const elHeight = elWidth * aspect;
+            context.drawImage(el.image, -elWidth / 2, -elHeight / 2, elWidth, elHeight);
+            // Reset shadow
+            if (el.iconShadow?.enabled) {
+                context.shadowColor = 'transparent';
+                context.shadowBlur = 0;
+                context.shadowOffsetX = 0;
+                context.shadowOffsetY = 0;
+            }
+        } else if (el.type === 'overlay' && el.image) {
+            // Overlays are rendered as images (same as graphics)
+            if (el.iconShadow?.enabled) {
+                const s = el.iconShadow;
+                const hex = s.color || '#000000';
+                const r = parseInt(hex.slice(1,3), 16);
+                const g = parseInt(hex.slice(3,5), 16);
+                const b = parseInt(hex.slice(5,7), 16);
+                context.shadowColor = `rgba(${r},${g},${b},${(s.opacity || 0) / 100})`;
+                context.shadowBlur = s.blur || 0;
+                context.shadowOffsetX = s.x || 0;
+                context.shadowOffsetY = s.y || 0;
+            }
+            const aspect = el.image.height / el.image.width;
+            const elHeight = elWidth * aspect;
+            context.drawImage(el.image, -elWidth / 2, -elHeight / 2, elWidth, elHeight);
+            if (el.iconShadow?.enabled) {
+                context.shadowColor = 'transparent';
+                context.shadowBlur = 0;
+                context.shadowOffsetX = 0;
+                context.shadowOffsetY = 0;
+            }
         } else if (el.type === 'text') {
             const elText = getElementText(el);
             if (!elText) { context.restore(); return; }
@@ -8175,6 +8458,13 @@ function drawBackground() {
             ctx.fillRect(0, 0, dims.width, dims.height);
             ctx.globalAlpha = 1;
         }
+    }
+
+    // ─── Scenic Decor Overlay ───
+    if (bg._scenicOverlay && bg._scenicOverlay !== 'none' && typeof _scenicCache !== 'undefined' && _scenicCache[bg._scenicOverlay]) {
+        ctx.globalAlpha = _scenicCache[bg._scenicOverlay].opacity / 100;
+        ctx.drawImage(_scenicCache[bg._scenicOverlay].img, 0, 0, dims.width, dims.height);
+        ctx.globalAlpha = 1;
     }
 }
 
@@ -8700,10 +8990,14 @@ let emojiPickerInitialized = false;
 function showEmojiPicker() {
     const picker = document.getElementById('emoji-picker');
     const iconPicker = document.getElementById('icon-picker');
+    const badgePicker = document.getElementById('badge-picker');
+    const overlayPicker = document.getElementById('overlay-picker');
     if (!picker) return;
 
-    // Close icon picker if open
+    // Close other pickers if open
     if (iconPicker) iconPicker.style.display = 'none';
+    if (badgePicker) badgePicker.style.display = 'none';
+    if (overlayPicker) overlayPicker.style.display = 'none';
 
     // Toggle
     if (picker.style.display !== 'none') {
@@ -8830,10 +9124,14 @@ async function loadIconPreview(item, name) {
 function showIconPicker() {
     const picker = document.getElementById('icon-picker');
     const emojiPicker = document.getElementById('emoji-picker');
+    const badgePicker = document.getElementById('badge-picker');
+    const overlayPicker = document.getElementById('overlay-picker');
     if (!picker) return;
 
-    // Close emoji picker if open
+    // Close other pickers if open
     if (emojiPicker) emojiPicker.style.display = 'none';
+    if (badgePicker) badgePicker.style.display = 'none';
+    if (overlayPicker) overlayPicker.style.display = 'none';
 
     // Toggle
     if (picker.style.display !== 'none') {
@@ -8892,11 +9190,24 @@ function showIconPicker() {
 function renderIconGrid(category) {
     const grid = document.getElementById('icon-grid');
     if (!grid) return;
-    const icons = category === 'popular' ? (typeof LUCIDE_POPULAR !== 'undefined' ? LUCIDE_POPULAR : []) :
-                                            (typeof LUCIDE_ALL !== 'undefined' ? LUCIDE_ALL : []);
-    grid.innerHTML = icons.map(name =>
-        `<div class="picker-grid-item icon-grid-item" data-icon-name="${name}" title="${name}"><div class="icon-placeholder"></div></div>`
-    ).join('');
+
+    // Check if it's a curated category pack from element-presets.js
+    if (typeof categoryIconPacks !== 'undefined' && categoryIconPacks[category]) {
+        const icons = categoryIconPacks[category].icons;
+        grid.innerHTML = icons.map(name =>
+            `<div class="picker-grid-item icon-grid-item" data-icon-name="${name}" title="${name}"><div class="icon-placeholder"></div></div>`
+        ).join('');
+    } else if (category === 'popular') {
+        const icons = (typeof LUCIDE_POPULAR !== 'undefined' ? LUCIDE_POPULAR : []);
+        grid.innerHTML = icons.map(name =>
+            `<div class="picker-grid-item icon-grid-item" data-icon-name="${name}" title="${name}"><div class="icon-placeholder"></div></div>`
+        ).join('');
+    } else {
+        const icons = (typeof LUCIDE_ALL !== 'undefined' ? LUCIDE_ALL : []);
+        grid.innerHTML = icons.map(name =>
+            `<div class="picker-grid-item icon-grid-item" data-icon-name="${name}" title="${name}"><div class="icon-placeholder"></div></div>`
+        ).join('');
+    }
     wireIconClicks(grid);
     if (iconImageObserver) {
         grid.querySelectorAll('.icon-grid-item').forEach(item => {
@@ -8926,6 +9237,200 @@ function wireIconClicks(grid) {
         item.onclick = () => {
             addIconElement(item.dataset.iconName);
             document.getElementById('icon-picker').style.display = 'none';
+        };
+    });
+}
+
+// ===== Badge Picker (inline dropdown) =====
+let badgePickerInitialized = false;
+
+function showBadgePicker() {
+    const picker = document.getElementById('badge-picker');
+    const emojiPicker = document.getElementById('emoji-picker');
+    const iconPicker = document.getElementById('icon-picker');
+    const overlayPicker = document.getElementById('overlay-picker');
+    if (!picker) return;
+
+    // Close other pickers
+    if (emojiPicker) emojiPicker.style.display = 'none';
+    if (iconPicker) iconPicker.style.display = 'none';
+    if (overlayPicker) overlayPicker.style.display = 'none';
+
+    // Toggle
+    if (picker.style.display !== 'none') {
+        picker.style.display = 'none';
+        return;
+    }
+
+    picker.style.display = '';
+    const searchInput = document.getElementById('badge-search');
+    if (searchInput) {
+        searchInput.value = '';
+        setTimeout(() => searchInput.focus(), 50);
+    }
+
+    // Reset to all category
+    document.querySelectorAll('#badge-categories .picker-cat').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.category === 'all');
+    });
+    renderBadgeGrid('all');
+
+    if (!badgePickerInitialized) {
+        badgePickerInitialized = true;
+
+        // Category tabs
+        document.querySelectorAll('#badge-categories .picker-cat').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#badge-categories .picker-cat').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                const searchVal = document.getElementById('badge-search')?.value?.trim();
+                if (searchVal) {
+                    renderBadgeSearchResults(searchVal, btn.dataset.category);
+                } else {
+                    renderBadgeGrid(btn.dataset.category);
+                }
+            });
+        });
+
+        // Search
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                const val = searchInput.value.trim().toLowerCase();
+                const active = document.querySelector('#badge-categories .picker-cat.active');
+                const cat = active?.dataset.category || 'all';
+                if (val) {
+                    renderBadgeSearchResults(val, cat);
+                } else {
+                    renderBadgeGrid(cat);
+                }
+            });
+        }
+    }
+}
+
+function renderBadgeGrid(category) {
+    const grid = document.getElementById('badge-grid');
+    if (!grid || typeof badgePresets === 'undefined') return;
+    const badges = category === 'all' ? badgePresets : badgePresets.filter(b => b.category === category);
+    grid.innerHTML = badges.map(b => {
+        const filledSVG = typeof fillTemplate === 'function' ? fillTemplate(b.svg, b.textFields || {}, b.colorFields || {}) : b.svg;
+        return `<div class="picker-grid-item badge-grid-item" data-badge-id="${b.id}" title="${b.name}">
+            <div class="badge-thumb">${filledSVG}</div>
+            <span class="badge-label">${b.label || b.name}</span>
+        </div>`;
+    }).join('');
+    wireBadgeClicks(grid);
+}
+
+function renderBadgeSearchResults(query, category) {
+    const grid = document.getElementById('badge-grid');
+    if (!grid || typeof badgePresets === 'undefined') return;
+    let results = badgePresets.filter(b =>
+        b.name.toLowerCase().includes(query) ||
+        (b.label && b.label.toLowerCase().includes(query)) ||
+        b.category.includes(query)
+    );
+    if (category !== 'all') results = results.filter(b => b.category === category);
+    grid.innerHTML = results.map(b => {
+        const filledSVG = typeof fillTemplate === 'function' ? fillTemplate(b.svg, b.textFields || {}, b.colorFields || {}) : b.svg;
+        return `<div class="picker-grid-item badge-grid-item" data-badge-id="${b.id}" title="${b.name}">
+            <div class="badge-thumb">${filledSVG}</div>
+            <span class="badge-label">${b.label || b.name}</span>
+        </div>`;
+    }).join('');
+    wireBadgeClicks(grid);
+}
+
+function wireBadgeClicks(grid) {
+    grid.querySelectorAll('.badge-grid-item').forEach(item => {
+        item.onclick = () => {
+            const preset = badgePresets.find(b => b.id === item.dataset.badgeId);
+            if (preset) {
+                addBadgeElement(preset);
+                document.getElementById('badge-picker').style.display = 'none';
+            }
+        };
+    });
+}
+
+// ===== Overlay Picker (inline dropdown) =====
+let overlayPickerInitialized = false;
+
+function showOverlayPicker() {
+    const picker = document.getElementById('overlay-picker');
+    const emojiPicker = document.getElementById('emoji-picker');
+    const iconPicker = document.getElementById('icon-picker');
+    const badgePicker = document.getElementById('badge-picker');
+    if (!picker) return;
+
+    // Close other pickers
+    if (emojiPicker) emojiPicker.style.display = 'none';
+    if (iconPicker) iconPicker.style.display = 'none';
+    if (badgePicker) badgePicker.style.display = 'none';
+
+    // Toggle
+    if (picker.style.display !== 'none') {
+        picker.style.display = 'none';
+        return;
+    }
+
+    picker.style.display = '';
+
+    // Reset to all category
+    document.querySelectorAll('#overlay-categories .picker-cat').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.category === 'all');
+    });
+    renderOverlayGrid('all');
+
+    if (!overlayPickerInitialized) {
+        overlayPickerInitialized = true;
+
+        // Category tabs
+        document.querySelectorAll('#overlay-categories .picker-cat').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#overlay-categories .picker-cat').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderOverlayGrid(btn.dataset.category);
+            });
+        });
+    }
+}
+
+function renderOverlayGrid(category) {
+    const grid = document.getElementById('overlay-grid');
+    if (!grid) return;
+    const overlays = typeof overlayPresets !== 'undefined' ? overlayPresets : [];
+    const trust = typeof trustPresets !== 'undefined' ? trustPresets : [];
+    let items;
+
+    if (category === 'all') {
+        items = [...overlays, ...trust];
+    } else if (category === 'rating' || category === 'social') {
+        items = trust.filter(t => t.category === category);
+    } else {
+        items = overlays.filter(o => o.category === category);
+    }
+
+    grid.innerHTML = items.map(o => {
+        const filledSVG = typeof fillTemplate === 'function' ? fillTemplate(o.svg, o.textFields || {}, o.colorFields || {}) : o.svg;
+        return `<div class="picker-grid-item overlay-grid-item" data-overlay-id="${o.id}" title="${o.name}">
+            <div class="overlay-thumb">${filledSVG}</div>
+            <span class="overlay-label">${o.label || o.name}</span>
+        </div>`;
+    }).join('');
+    wireOverlayClicks(grid);
+}
+
+function wireOverlayClicks(grid) {
+    grid.querySelectorAll('.overlay-grid-item').forEach(item => {
+        item.onclick = () => {
+            const id = item.dataset.overlayId;
+            const preset = overlayPresets.find(o => o.id === id) ||
+                           (typeof trustPresets !== 'undefined' ? trustPresets.find(t => t.id === id) : null);
+            if (preset) {
+                addOverlayElement(preset);
+                document.getElementById('overlay-picker').style.display = 'none';
+            }
         };
     });
 }
