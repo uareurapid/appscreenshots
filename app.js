@@ -2189,13 +2189,124 @@ async function switchProject(projectId) {
     updateCanvas();
 }
 
-// Create a new project
+// Generate a placeholder screenshot image so device frames are visible
+// Returns an Image object with a subtle gradient + watermark
+function generatePlaceholderScreenshot(deviceType) {
+    const dims = deviceType === 'custom'
+        ? { width: state.customWidth, height: state.customHeight }
+        : (deviceDimensions[deviceType] || deviceDimensions['iphone-6.9']);
+    const c = document.createElement('canvas');
+    c.width = dims.width;
+    c.height = dims.height;
+    const ctx = c.getContext('2d');
+
+    // Subtle dark gradient background
+    const g = ctx.createLinearGradient(0, 0, dims.width, dims.height);
+    g.addColorStop(0, '#1a1d2e');
+    g.addColorStop(0.5, '#232840');
+    g.addColorStop(1, '#1a1d2e');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, dims.width, dims.height);
+
+    // Subtle geometric accent
+    ctx.fillStyle = 'rgba(94, 236, 192, 0.04)';
+    ctx.beginPath();
+    ctx.arc(dims.width * 0.8, dims.height * 0.2, dims.width * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(94, 236, 192, 0.03)';
+    ctx.beginPath();
+    ctx.arc(dims.width * 0.25, dims.height * 0.75, dims.width * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Camera icon
+    const cx = dims.width / 2, cy = dims.height * 0.42;
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = dims.width * 0.004;
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    const iw = dims.width * 0.12, ih = iw * 0.8;
+    ctx.beginPath();
+    ctx.roundRect(cx - iw/2, cy - ih/2 + ih*0.1, iw, ih*0.9, iw*0.1);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, iw*0.22, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, iw*0.12, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fill();
+
+    // Text
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.font = `${dims.width * 0.028}px -apple-system, BlinkMacSystemFont, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Your Screenshot Here', cx, cy + ih*0.6);
+
+    // Watermark
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.font = `${dims.width * 0.014}px -apple-system, BlinkMacSystemFont, sans-serif`;
+    ctx.fillText('shots.cristomade.it', cx, dims.height * 0.82);
+
+    // Return promise that resolves when image is fully loaded
+    const dataUrl = c.toDataURL('image/png');
+    return new Promise(function(resolve) {
+        const img = new Image();
+        img.onload = function() { resolve(img); };
+        img.onerror = function() { resolve(null); };
+        img.src = dataUrl;
+    });
+}
 async function createProject(name, templateId) {
     const id = 'project_' + Date.now();
     projects.push({ id, name, screenshotCount: 0 });
     saveProjectsMeta();
     await switchProject(id);
-    if (templateId && typeof getTemplateById === 'function') {
+
+    // Handle special device-mockup templates
+    const isIPhone2D = templateId === '_iphone_2d';
+    const isIPhone3D = templateId === '_iphone_3d';
+    const isDeviceTemplate = isIPhone2D || isIPhone3D;
+
+    if (isDeviceTemplate) {
+        // Generate a placeholder screenshot image so the device frame is visible
+        const placeholderImg = typeof generatePlaceholderScreenshot === 'function'
+            ? await generatePlaceholderScreenshot(state.outputDevice)
+            : null;
+        const placeholderSrc = placeholderImg ? placeholderImg.src : null;
+
+        // Create 5 screenshots with the placeholder image and device settings
+        for (let i = 0; i < 5; i++) {
+            createNewScreenshot(placeholderImg, placeholderSrc, 'Screen ' + (i + 1), 'en', state.outputDevice);
+        }
+        projects[projects.length - 1].screenshotCount = 5;
+        state.selectedIndex = 0;
+
+        // Apply device settings to each screenshot
+        state.screenshots.forEach(function(ss) {
+            ss.screenshot.use3D = isIPhone3D;
+            ss.screenshot.device3D = 'iphone';
+            if (isIPhone2D) {
+                // 2D: centered, standard drop shadow
+                ss.screenshot.scale = 70;
+                ss.screenshot.y = 55;
+                ss.screenshot.x = 50;
+                ss.screenshot.rotation = 0;
+                ss.screenshot.cornerRadius = 24;
+                ss.screenshot.shadow = { enabled: true, color: '#000000', blur: 40, opacity: 30, x: 0, y: 20 };
+                ss.screenshot.frame = { enabled: false, color: '#1d1d1f', width: 12, opacity: 100 };
+            } else {
+                // 3D: slight angle for perspective
+                ss.screenshot.scale = 70;
+                ss.screenshot.y = 58;
+                ss.screenshot.x = 50;
+                ss.screenshot.rotation = 0;
+                ss.screenshot.rotation3D = { x: 0, y: 0, z: 0 };
+                ss.screenshot.shadow = { enabled: true, color: '#000000', blur: 50, opacity: 40, x: 0, y: 25 };
+            }
+        });
+        saveState();
+    } else if (templateId && typeof getTemplateById === 'function') {
         const tpl = getTemplateById(templateId);
         if (tpl && !tpl.isNone) {
             const s = tpl.settings;
@@ -2207,10 +2318,25 @@ async function createProject(name, templateId) {
             if (s.text) {
                 ['headlineFont','headlineSize','headlineWeight','headlineColor','headlineItalic','headlineUnderline','headlineStrikethrough','subheadlineFont','subheadlineSize','subheadlineWeight','subheadlineColor','subheadlineOpacity','position','offsetY','lineHeight'].forEach(function(k) { if (s.text[k] !== undefined) state.defaults.text[k] = s.text[k]; });
             }
+            // Create 5 blank screens pre-styled with the template
+            for (let i = 0; i < 5; i++) {
+                createNewScreenshot(null, null, 'Screen ' + (i + 1), null, state.outputDevice);
+            }
+            projects[projects.length - 1].screenshotCount = 5;
+            state.selectedIndex = 0;
+            // Apply template to each screenshot (handles overlay image loading etc.)
+            if (typeof applyTemplateToScreenshot === 'function') {
+                state.screenshots.forEach(function(ss) {
+                    applyTemplateToScreenshot(ss, templateId);
+                });
+            }
             saveState();
         }
     }
     updateProjectSelector();
+    updateScreenshotList();
+    syncUIWithState();
+    updateCanvas();
 }
 
 // Rename current project

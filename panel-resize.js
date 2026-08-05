@@ -67,15 +67,32 @@
     var templateSelect = document.getElementById('project-template-select');
     function populateTemplateDropdown() {
         if(!templateSelect || typeof visualTemplates === 'undefined') return;
-        if(templateSelect.options.length > 1) return;
-        templateSelect.innerHTML = '<option value="">None (start blank)</option>';
-        visualTemplates.forEach(function(t) {
-            if(t.isNone) return;
-            var opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = t.name;
-            templateSelect.appendChild(opt);
-        });
+        // Only populate visual templates once
+        if(templateSelect.options.length <= 1) {
+            templateSelect.innerHTML = '<option value="">None (start blank)</option>';
+            visualTemplates.forEach(function(t) {
+                if(t.isNone) return;
+                var opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.name;
+                templateSelect.appendChild(opt);
+            });
+        }
+        // Always add device mockup presets (if not already present)
+        if (!templateSelect.querySelector('option[value="_iphone_2d"]')) {
+            var divider = document.createElement('option');
+            divider.disabled = true;
+            divider.textContent = '── Device Mockups ──';
+            templateSelect.appendChild(divider);
+            var opt2d = document.createElement('option');
+            opt2d.value = '_iphone_2d';
+            opt2d.textContent = '📱 iPhone 2D Template';
+            templateSelect.appendChild(opt2d);
+            var opt3d = document.createElement('option');
+            opt3d.value = '_iphone_3d';
+            opt3d.textContent = '📱 iPhone 3D Template';
+            templateSelect.appendChild(opt3d);
+        }
     }
 
     if(document.readyState === 'loading') {
