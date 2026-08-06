@@ -4699,6 +4699,37 @@ function setupEventListeners() {
         }
     });
 
+    // Crypto copy buttons in About modal
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.crypto-copy-btn');
+        if (!btn) return;
+        const targetId = btn.dataset.target;
+        const codeEl = document.getElementById(targetId);
+        if (!codeEl) return;
+        navigator.clipboard.writeText(codeEl.textContent).then(() => {
+            btn.classList.add('copied');
+            btn.textContent = '✓';
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.textContent = '📋';
+            }, 1500);
+        }).catch(() => {
+            // Fallback for older browsers
+            const ta = document.createElement('textarea');
+            ta.value = codeEl.textContent;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            btn.classList.add('copied');
+            btn.textContent = '✓';
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.textContent = '📋';
+            }, 1500);
+        });
+    });
+
     // Settings modal
     document.getElementById('settings-btn').addEventListener('click', () => {
         openSettingsModal();

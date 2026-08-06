@@ -3743,3 +3743,106 @@ input[type="range"]::-webkit-slider-thumb {
     color: var(--text-secondary);
     text-align: center;
 }
+
+/* ─── About Modal Donation Section ─── */
+.donation-section {
+    margin-top: 16px;
+    text-align: left;
+}
+
+.donation-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 16px 0;
+}
+
+.donation-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.donation-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 12px;
+}
+
+.kofi-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px;
+    background: #ff5e5b;
+    color: white;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.15s;
+}
+.kofi-button:hover {
+    background: #e04e4b;
+    color: white;
+}
+
+.crypto-wallets {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.crypto-wallet {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+
+.crypto-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 80px;
+}
+
+.crypto-address {
+    flex: 1;
+    font-size: 10px;
+    color: var(--text-secondary);
+    background: var(--bg-primary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.crypto-copy-btn {
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    transition: all 0.15s;
+}
+.crypto-copy-btn:hover {
+    background: var(--accent-subtle-strong);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.crypto-copy-btn.copied {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}

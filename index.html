@@ -2000,18 +2000,48 @@
 
     <!-- About Modal -->
     <div class="modal-overlay" id="about-modal">
-        <div class="modal">
+        <div class="modal" style="max-width: 420px;">
             <div class="modal-icon" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);">
                 <img src="img/info.svg" width="32" height="32" alt="Info" style="filter: invert(0.5) sepia(1) saturate(5) hue-rotate(200deg);">
             </div>
             <h3 class="modal-title">App Store Screenshot Generator</h3>
-            <p class="modal-message" style="margin-bottom: 16px;">A free vibe coded tool for creating beautiful App Store screenshots with customizable backgrounds, text overlays, and device frames.</p>
-            <p class="modal-message" style="margin-bottom: 16px;">Created by <a href="https://yuzuhub.com/en" target="_blank" style="color: var(--accent);">Stefan from yuzuhub.com</a></p>
-            <p class="modal-message" style="margin-bottom: 16px;">This project is free and open source under the MIT License.</p>
-            <p class="modal-message" style="margin-bottom: 8px;">
-                <a href="https://yuzu-hub.github.io/appscreen/" target="_blank" style="color: var(--accent);">Live Version</a> ·
-                <a href="https://github.com/YUZU-Hub/appscreen" target="_blank" style="color: var(--accent);">GitHub Repo</a>
-            </p>
+            <p class="modal-message">A free tool for creating beautiful App Store screenshots with customizable backgrounds, text overlays, and device frames.</p>
+            <p class="modal-message" style="margin-bottom: 4px;">Created by <a href="https://cristomade.it" target="_blank" style="color: var(--accent);">CristoMade</a></p>
+
+            <!-- Donation Section -->
+            <div class="donation-section">
+                <div class="donation-divider"></div>
+                <h4 class="donation-title">☕ Support this project</h4>
+                <p class="donation-subtitle">This tool is free and open source. If it helps you ship better screenshots, consider buying me a coffee.</p>
+
+                <a href="https://ko-fi.com/cristomade" target="_blank" class="kofi-button">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.062 3.511c-1.246 1.453-4.011 3.976-4.011 3.976s-.121.119-.31.023c-.076-.057-.108-.09-.108-.09-.443-.441-3.368-3.049-4.034-3.954-.709-.965-1.041-2.7-.091-3.71.951-1.01 3.005-1.086 4.363.407 0 0 1.565-1.782 3.468-.963 1.904.82 1.969 3.46.723 5.311z"/>
+                    </svg>
+                    Support on Ko-fi
+                </a>
+
+                <div class="donation-divider"></div>
+                <h4 class="donation-title">₿ Crypto Donations</h4>
+                <div class="crypto-wallets">
+                    <div class="crypto-wallet">
+                        <span class="crypto-label">BTC</span>
+                        <code class="crypto-address" id="btc-address">bc1qtvavaex3uujcfdesy7qhvzuvdf5d0eg9ch606j</code>
+                        <button class="crypto-copy-btn" data-target="btc-address" title="Copy BTC address">📋</button>
+                    </div>
+                    <div class="crypto-wallet">
+                        <span class="crypto-label">ETH / USDC</span>
+                        <code class="crypto-address" id="eth-address">0x59528095B6dA104B7ec98850293E73a87d6763Ec</code>
+                        <button class="crypto-copy-btn" data-target="eth-address" title="Copy ETH address">📋</button>
+                    </div>
+                    <div class="crypto-wallet">
+                        <span class="crypto-label">SOL</span>
+                        <code class="crypto-address" id="sol-address">9bqMK7kXDBTakMzwBKTsLqCvvgN6BU3FSs69kA6jwmdX</code>
+                        <button class="crypto-copy-btn" data-target="sol-address" title="Copy SOL address">📋</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="modal-buttons">
                 <button class="modal-btn modal-btn-confirm" id="about-modal-close" style="background: var(--accent);">Close</button>
             </div>
