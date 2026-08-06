@@ -239,6 +239,109 @@ async function generateTitlesWithGoogle(apiKey, images, prompt) {
 }
 
 /**
+ * Generate titles using DeepSeek vision API (OpenAI-compatible)
+ * @param {string} apiKey - DeepSeek API key
+ * @param {Array} images - Array of { mimeType, base64 } objects
+ * @param {string} prompt - Text prompt
+ * @returns {Promise<string>} - Response text
+ *
+ * NOTE: DeepSeek currently ships text-focused models. If a model does not
+ * accept image input the API will return an error, which is surfaced to the user.
+ */
+async function generateTitlesWithDeepSeek(apiKey, images, prompt) {
+    const model = getSelectedModel('deepseek');
+
+    // Build content array with images and text
+    const content = [];
+
+    for (const img of images) {
+        content.push({
+            type: "image_url",
+            image_url: {
+                url: `data:${img.mimeType};base64,${img.base64}`
+            }
+        });
+    }
+
+    content.push({ type: "text", text: prompt });
+
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: model,
+            max_tokens: 4096,
+            messages: [{ role: "user", content: content }]
+        })
+    });
+
+    if (!response.ok) {
+        const status = response.status;
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('DeepSeek Vision API Error:', { status, model, error: errorBody });
+        if (status === 401 || status === 403) throw new Error('AI_UNAVAILABLE');
+        throw new Error(`API request failed: ${status} - ${errorBody.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+}
+
+/**
+ * Generate titles using GLM vision API (OpenAI-compatible)
+ * @param {string} apiKey - GLM (Z.AI / Zhipu) API key
+ * @param {Array} images - Array of { mimeType, base64 } objects
+ * @param {string} prompt - Text prompt
+ * @returns {Promise<string>} - Response text
+ *
+ * Vision input is supported by the GLM-5V series (e.g. glm-5v-turbo).
+ */
+async function generateTitlesWithGLM(apiKey, images, prompt) {
+    const model = getSelectedModel('glm');
+
+    // Build content array with images and text
+    const content = [];
+
+    for (const img of images) {
+        content.push({
+            type: "image_url",
+            image_url: {
+                url: `data:${img.mimeType};base64,${img.base64}`
+            }
+        });
+    }
+
+    content.push({ type: "text", text: prompt });
+
+    const response = await fetch("https://api.z.ai/api/paas/v4/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: model,
+            max_tokens: 4096,
+            messages: [{ role: "user", content: content }]
+        })
+    });
+
+    if (!response.ok) {
+        const status = response.status;
+        const errorBody = await response.json().catch(() => ({}));
+        console.error('GLM Vision API Error:', { status, model, error: errorBody });
+        if (status === 401 || status === 403) throw new Error('AI_UNAVAILABLE');
+        throw new Error(`API request failed: ${status} - ${errorBody.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+}
+
+/**
  * Show the magical titles confirmation dialog
  */
 function showMagicalTitlesDialog() {
@@ -383,6 +486,10 @@ Write all titles in ${langName}.`;
             responseText = await generateTitlesWithOpenAI(apiKey, images, prompt);
         } else if (provider === 'google') {
             responseText = await generateTitlesWithGoogle(apiKey, images, prompt);
+        } else if (provider === 'deepseek') {
+            responseText = await generateTitlesWithDeepSeek(apiKey, images, prompt);
+        } else if (provider === 'glm') {
+            responseText = await generateTitlesWithGLM(apiKey, images, prompt);
         } else {
             throw new Error(`Unknown provider: ${provider}`);
         }

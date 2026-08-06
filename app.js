@@ -5914,6 +5914,10 @@ Translate to these language codes: ${targetLangs.join(', ')}`;
             responseText = await translateWithOpenAI(apiKey, prompt);
         } else if (provider === 'google') {
             responseText = await translateWithGoogle(apiKey, prompt);
+        } else if (provider === 'deepseek') {
+            responseText = await translateWithDeepSeek(apiKey, prompt);
+        } else if (provider === 'glm') {
+            responseText = await translateWithGLM(apiKey, prompt);
         }
 
         // Clean up response - remove markdown code blocks if present
@@ -6310,6 +6314,10 @@ Translate to these language codes: ${targetLangs.join(', ')}`;
             responseText = await translateWithOpenAI(apiKey, prompt);
         } else if (provider === 'google') {
             responseText = await translateWithGoogle(apiKey, prompt);
+        } else if (provider === 'deepseek') {
+            responseText = await translateWithDeepSeek(apiKey, prompt);
+        } else if (provider === 'glm') {
+            responseText = await translateWithGLM(apiKey, prompt);
         }
 
         updateStatus('Processing response...', 'Parsing translations');
@@ -6463,6 +6471,56 @@ async function translateWithGoogle(apiKey, prompt) {
 
     const data = await response.json();
     return data.candidates[0].content.parts[0].text;
+}
+
+async function translateWithDeepSeek(apiKey, prompt) {
+    const model = getSelectedModel('deepseek');
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: model,
+            max_tokens: 4096,
+            messages: [{ role: "user", content: prompt }]
+        })
+    });
+
+    if (!response.ok) {
+        const status = response.status;
+        if (status === 401 || status === 403) throw new Error('AI_UNAVAILABLE');
+        throw new Error(`API request failed: ${status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+}
+
+async function translateWithGLM(apiKey, prompt) {
+    const model = getSelectedModel('glm');
+    const response = await fetch("https://api.z.ai/api/paas/v4/chat/completions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: model,
+            max_tokens: 4096,
+            messages: [{ role: "user", content: prompt }]
+        })
+    });
+
+    if (!response.ok) {
+        const status = response.status;
+        if (status === 401 || status === 403) throw new Error('AI_UNAVAILABLE');
+        throw new Error(`API request failed: ${status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
 }
 
 function setTranslateStatus(message, type) {

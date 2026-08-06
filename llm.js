@@ -9,10 +9,11 @@ const llmProviders = {
         modelStorageKey: 'anthropicModel',
         models: [
             { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5 ($)' },
-            { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5 ($$)' },
-            { id: 'claude-opus-4-5-20251101', name: 'Claude Opus 4.5 ($$$)' }
+            { id: 'claude-sonnet-5', name: 'Claude Sonnet 5 ($$)' },
+            { id: 'claude-opus-5', name: 'Claude Opus 5 ($$$)' },
+            { id: 'claude-fable-5', name: 'Claude Fable 5 ($$$$)' }
         ],
-        defaultModel: 'claude-sonnet-4-5-20250929'
+        defaultModel: 'claude-sonnet-5'
     },
     openai: {
         name: 'OpenAI (GPT)',
@@ -20,11 +21,11 @@ const llmProviders = {
         storageKey: 'openaiApiKey',
         modelStorageKey: 'openaiModel',
         models: [
-            { id: 'gpt-5.1-2025-11-13', name: 'GPT-5.1 ($$$)' },
-            { id: 'gpt-5-mini-2025-08-07', name: 'GPT-5 Mini ($$)' },
-            { id: 'gpt-5-nano-2025-08-07', name: 'GPT-5 Nano ($)' }
+            { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna ($)' },
+            { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra ($$)' },
+            { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol ($$$)' }
         ],
-        defaultModel: 'gpt-5-mini-2025-08-07'
+        defaultModel: 'gpt-5.6-terra'
     },
     google: {
         name: 'Google (Gemini)',
@@ -32,19 +33,43 @@ const llmProviders = {
         storageKey: 'googleApiKey',
         modelStorageKey: 'googleModel',
         models: [
-            { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash (Preview) ($$)' },
-            { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro (Preview) ($$$)' },
-            { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite ($)' },
-            { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash ($$)' },
-            { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro ($$$)' }
+            { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite ($)' },
+            { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash-Lite ($)' },
+            { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash ($$)' },
+            { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash ($$)' },
+            { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro (Preview) ($$$)' }
         ],
-        defaultModel: 'gemini-2.5-flash'
+        defaultModel: 'gemini-3.5-flash'
+    },
+    deepseek: {
+        name: 'DeepSeek (V4)',
+        keyPrefix: 'sk-',
+        storageKey: 'deepseekApiKey',
+        modelStorageKey: 'deepseekModel',
+        models: [
+            { id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash ($)' },
+            { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro ($$)' }
+        ],
+        defaultModel: 'deepseek-v4-flash'
+    },
+    glm: {
+        name: 'GLM (Z.AI / Zhipu)',
+        keyPrefix: '',
+        storageKey: 'glmApiKey',
+        modelStorageKey: 'glmModel',
+        models: [
+            { id: 'glm-4.7-flash', name: 'GLM-4.7 Flash ($)' },
+            { id: 'glm-5-turbo', name: 'GLM-5 Turbo ($$)' },
+            { id: 'glm-5v-turbo', name: 'GLM-5V Turbo - Vision ($$)' },
+            { id: 'glm-5.2', name: 'GLM-5.2 ($$$)' }
+        ],
+        defaultModel: 'glm-5.2'
     }
 };
 
 /**
  * Get the selected model for a provider
- * @param {string} provider - Provider key (anthropic, openai, google)
+ * @param {string} provider - Provider key (anthropic, openai, google, deepseek, glm)
  * @returns {string} - Model ID
  */
 function getSelectedModel(provider) {
