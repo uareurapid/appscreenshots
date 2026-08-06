@@ -2419,6 +2419,8 @@ async function exportProject() {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
+            // Show tip modal after successful project backup export
+            setTimeout(() => { if (typeof showTipModal === 'function') showTipModal(); }, 800);
             resolve();
         };
 
@@ -4729,6 +4731,14 @@ function setupEventListeners() {
             }, 1500);
         });
     });
+
+    // Show the About/tip modal after an export completes
+    window.showTipModal = function() {
+        const modal = document.getElementById('about-modal');
+        if (modal) {
+            modal.classList.add('visible');
+        }
+    };
 
     // Settings modal
     document.getElementById('settings-btn').addEventListener('click', () => {
@@ -9122,6 +9132,9 @@ async function exportAllForLanguage(lang) {
     link.href = URL.createObjectURL(content);
     link.click();
     URL.revokeObjectURL(link.href);
+
+    // Show tip modal after successful export
+    setTimeout(() => { if (typeof showTipModal === 'function') showTipModal(); }, 800);
 }
 
 // Export all screenshots for all languages (separate folders)
@@ -9196,6 +9209,9 @@ async function exportAllLanguages() {
     link.href = URL.createObjectURL(content);
     link.click();
     URL.revokeObjectURL(link.href);
+
+    // Show tip modal after successful export
+    setTimeout(() => { if (typeof showTipModal === 'function') showTipModal(); }, 800);
 }
 
 // ===== Emoji Picker (inline dropdown) =====
