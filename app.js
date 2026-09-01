@@ -2488,18 +2488,36 @@ async function importProject(file) {
 }
 
 async function duplicateProject(sourceProjectId, customName) {
-    if (!db) return;
-
-    const transaction = db.transaction([PROJECTS_STORE], 'readonly');
-    const store = transaction.objectStore(PROJECTS_STORE);
-    const request = store.get(sourceProjectId);
+    // Resolve the connection lazily (same pattern as exportProject/importProject)
+    if (!getDb() && typeof ensureDatabase === 'function') {
+        await ensureDatabase();
+    }
+    const database = getDb();
+    if (!database) {
+        await showAppAlert('Database not available', 'error');
+        return false;
+    }
 
     return new Promise((resolve) => {
-        request.onsuccess = async () => {
+        const fail = async (message) => {
+            await showAppAlert(message, 'error');
+            resolve(false);
+        };
+
+        let transaction;
+        try {
+            transaction = database.transaction([PROJECTS_STORE], 'readonly');
+        } catch (e) {
+            fail('Could not read project data');
+            return;
+        }
+        const store = transaction.objectStore(PROJECTS_STORE);
+        const request = store.get(sourceProjectId);
+
+        request.onsuccess = () => {
             const projectData = request.result;
             if (!projectData) {
-                await showAppAlert('Could not read project data', 'error');
-                resolve();
+                fail('Could not read project data');
                 return;
             }
 
@@ -2513,16 +2531,32 @@ async function duplicateProject(sourceProjectId, customName) {
             projects.push({ id: newId, name: newName, screenshotCount: clonedData.screenshots?.length || 0 });
             saveProjectsMeta();
 
-            const writeTransaction = db.transaction([PROJECTS_STORE], 'readwrite');
+            let writeTransaction;
+            try {
+                writeTransaction = database.transaction([PROJECTS_STORE], 'readwrite');
+            } catch (e) {
+                fail('Could not save project data');
+                return;
+            }
             const writeStore = writeTransaction.objectStore(PROJECTS_STORE);
             writeStore.put(clonedData);
 
             writeTransaction.oncomplete = async () => {
-                await switchProject(newId);
-                updateProjectSelector();
-                resolve();
+                try {
+                    await switchProject(newId);
+                    updateProjectSelector();
+                    resolve(true);
+                } catch (e) {
+                    console.error('Error switching to duplicated project:', e);
+                    fail('Project copied, but failed to open it');
+                }
             };
+            writeTransaction.onerror = () => fail('Could not save project data');
+            writeTransaction.onabort = () => fail('Could not save project data');
         };
+
+        transaction.onerror = () => fail('Could not read project data');
+        transaction.onabort = () => fail('Could not read project data');
     });
 }
 
@@ -4441,21 +4475,50 @@ function setupEventListeners() {
             return;
         }
 
-        const mode = document.getElementById('project-modal').dataset.mode;
-        if (mode === 'new') {
-            const duplicateFromId = document.getElementById('duplicate-from-select').value;
-            const templateEl = document.getElementById('project-template-select');
-            const templateId = templateEl ? templateEl.value : '';
-            if (duplicateFromId) {
-                await duplicateProject(duplicateFromId, name);
-            } else {
-                await createProject(name, templateId || undefined);
+        const modal = document.getElementById('project-modal');
+        const confirmBtn = document.getElementById('project-modal-confirm');
+        const mode = modal.dataset.mode;
+        let success = false;
+        let actionError = null;
+
+        // Prevent double-clicks / repeated Enter presses from stacking up copies
+        if (confirmBtn.disabled) return;
+        confirmBtn.disabled = true;
+
+        try {
+            if (mode === 'new') {
+                const duplicateFromId = document.getElementById('duplicate-from-select').value;
+                const templateEl = document.getElementById('project-template-select');
+                const templateId = templateEl ? templateEl.value : '';
+                if (duplicateFromId) {
+                    success = await duplicateProject(duplicateFromId, name);
+                } else {
+                    await createProject(name, templateId || undefined);
+                    success = true;
+                }
+            } else if (mode === 'rename') {
+                renameProject(name);
+                success = true;
             }
-        } else if (mode === 'rename') {
-            renameProject(name);
+        } catch (e) {
+            actionError = e;
+            console.error('Project modal action failed:', e);
+        } finally {
+            // Always close the modal so repeated clicks can't stack up copies
+            modal.classList.remove('visible');
+            confirmBtn.disabled = false;
         }
 
-        document.getElementById('project-modal').classList.remove('visible');
+        // Give clear feedback so the action never silently "does nothing"
+        if (actionError) {
+            await showAppAlert('Failed: ' + (actionError.message || 'something went wrong'), 'error');
+        } else if (success) {
+            if (mode === 'new') {
+                await showAppAlert(`Project "${name}" created successfully`, 'success');
+            } else if (mode === 'rename') {
+                await showAppAlert(`Project renamed to "${name}"`, 'success');
+            }
+        }
     });
 
     document.getElementById('project-name-input').addEventListener('keydown', (e) => {
