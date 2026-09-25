@@ -7974,6 +7974,125 @@ function renderScreenshotToCanvas(index, targetCanvas, targetCtx, dims, previewS
     drawElementsToContext(targetCtx, dims, elements, 'above-text');
 }
 
+// ─── Background Image Drawing (shared by preview + export paths) ───
+// Reusable scratch canvas for blurring a background image with edge-extended
+// (padded) borders — see drawBlurredImageOpaqueToContext().
+var _bgBlurScratchCanvas = document.createElement('canvas');
+
+// Draws an 'image' background into any 2D context. Kept in one place so the
+// preview and export render paths can never drift apart.
+function drawBackgroundImageToContext(context, dims, bg) {
+    const img = bg.image;
+
+    // Guard against broken/unloaded images (e.g. template URLs that 404) and
+    // against an 'image' background where no image has been picked yet. Without
+    // this fallback nothing would be painted and the canvas would stay
+    // transparent, which makes exported PNGs invalid for the App Store.
+    if (!img || !img.complete || !img.naturalWidth) {
+        context.fillStyle = '#1a1a2e';
+        context.fillRect(0, 0, dims.width, dims.height);
+        return;
+    }
+
+    let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
+    let dx = 0, dy = 0, dw = dims.width, dh = dims.height;
+
+    if (bg.imageFit === 'cover') {
+        const imgRatio = img.width / img.height;
+        const canvasRatio = dims.width / dims.height;
+
+        if (imgRatio > canvasRatio) {
+            sw = img.height * canvasRatio;
+            sx = (img.width - sw) / 2;
+        } else {
+            sh = img.width / canvasRatio;
+            sy = (img.height - sh) / 2;
+        }
+    } else if (bg.imageFit === 'contain') {
+        const imgRatio = img.width / img.height;
+        const canvasRatio = dims.width / dims.height;
+
+        if (imgRatio > canvasRatio) {
+            dh = dims.width / imgRatio;
+            dy = (dims.height - dh) / 2;
+        } else {
+            dw = dims.height * imgRatio;
+            dx = (dims.width - dw) / 2;
+        }
+
+        context.fillStyle = '#000';
+        context.fillRect(0, 0, dims.width, dims.height);
+    }
+
+    const blur = bg.imageBlur > 0 ? bg.imageBlur : 0;
+
+    if (blur > 0 && bg.imageFit === 'cover') {
+        // 'cover' makes the image exactly fill the canvas, so a direct blurred
+        // drawImage samples transparent pixels beyond the image bounds and
+        // leaves a semi-transparent border — i.e. exported PNGs with alpha,
+        // which App Store Connect rejects. Blur through a padded scratch
+        // canvas instead so every pixel stays fully opaque.
+        drawBlurredImageOpaqueToContext(context, dims, img, { sx, sy, sw, sh, dx, dy, dw, dh }, blur);
+    } else {
+        if (blur > 0) {
+            context.filter = `blur(${blur}px)`;
+        }
+
+        context.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+        context.filter = 'none';
+    }
+
+    if (bg.overlayOpacity > 0) {
+        context.fillStyle = bg.overlayColor;
+        context.globalAlpha = bg.overlayOpacity / 100;
+        context.fillRect(0, 0, dims.width, dims.height);
+        context.globalAlpha = 1;
+    }
+}
+
+// Blurs an image onto `context` while keeping every pixel opaque.
+// The blur is applied to a scratch canvas padded by the blur's reach, and that
+// padding is filled by stretching the image's edge pixels outward (edge clamp),
+// so the blur always samples opaque pixels instead of fading to transparent.
+function drawBlurredImageOpaqueToContext(context, dims, img, r, blur) {
+    const pad = Math.ceil(blur * 3);
+    const tmpW = Math.ceil(dims.width) + pad * 2;
+    const tmpH = Math.ceil(dims.height) + pad * 2;
+
+    if (_bgBlurScratchCanvas.width !== tmpW || _bgBlurScratchCanvas.height !== tmpH) {
+        _bgBlurScratchCanvas.width = tmpW;
+        _bgBlurScratchCanvas.height = tmpH;
+    }
+    const scratch = _bgBlurScratchCanvas.getContext('2d');
+    scratch.setTransform(1, 0, 0, 1, 0, 0);
+    scratch.clearRect(0, 0, tmpW, tmpH);
+
+    // Image destination rect, shifted into padded space
+    const px = r.dx + pad;
+    const py = r.dy + pad;
+
+    scratch.drawImage(img, r.sx, r.sy, r.sw, r.sh, px, py, r.dw, r.dh);
+
+    // Extend the edges outward with thin slices taken from the image edges
+    const bw = Math.max(1, Math.min(r.sw / 2, 2));
+    const bh = Math.max(1, Math.min(r.sh / 2, 2));
+    // top / bottom
+    scratch.drawImage(img, r.sx, r.sy, r.sw, bh, px, py - pad, r.dw, pad);
+    scratch.drawImage(img, r.sx, r.sy + r.sh - bh, r.sw, bh, px, py + r.dh, r.dw, pad);
+    // left / right
+    scratch.drawImage(img, r.sx, r.sy, bw, r.sh, px - pad, py, pad, r.dh);
+    scratch.drawImage(img, r.sx + r.sw - bw, r.sy, bw, r.sh, px + r.dw, py, pad, r.dh);
+    // corners
+    scratch.drawImage(img, r.sx, r.sy, bw, bh, px - pad, py - pad, pad, pad);
+    scratch.drawImage(img, r.sx + r.sw - bw, r.sy, bw, bh, px + r.dw, py - pad, pad, pad);
+    scratch.drawImage(img, r.sx, r.sy + r.sh - bh, bw, bh, px - pad, py + r.dh, pad, pad);
+    scratch.drawImage(img, r.sx + r.sw - bw, r.sy + r.sh - bh, bw, bh, px + r.dw, py + r.dh, pad, pad);
+
+    context.filter = `blur(${blur}px)`;
+    context.drawImage(_bgBlurScratchCanvas, -pad, -pad);
+    context.filter = 'none';
+}
+
 function drawBackgroundToContext(context, dims, bg) {
     if (bg.type === 'gradient') {
         const angle = bg.gradient.angle * Math.PI / 180;
@@ -7992,57 +8111,8 @@ function drawBackgroundToContext(context, dims, bg) {
     } else if (bg.type === 'solid') {
         context.fillStyle = bg.solid;
         context.fillRect(0, 0, dims.width, dims.height);
-    } else if (bg.type === 'image' && bg.image) {
-        const img = bg.image;
-        // Guard against broken/unloaded images (e.g. template URLs that 404).
-        if (!img || !img.complete || !img.naturalWidth) {
-            context.fillStyle = '#1a1a2e';
-            context.fillRect(0, 0, dims.width, dims.height);
-            return;
-        }
-        let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
-        let dx = 0, dy = 0, dw = dims.width, dh = dims.height;
-
-        if (bg.imageFit === 'cover') {
-            const imgRatio = img.width / img.height;
-            const canvasRatio = dims.width / dims.height;
-
-            if (imgRatio > canvasRatio) {
-                sw = img.height * canvasRatio;
-                sx = (img.width - sw) / 2;
-            } else {
-                sh = img.width / canvasRatio;
-                sy = (img.height - sh) / 2;
-            }
-        } else if (bg.imageFit === 'contain') {
-            const imgRatio = img.width / img.height;
-            const canvasRatio = dims.width / dims.height;
-
-            if (imgRatio > canvasRatio) {
-                dh = dims.width / imgRatio;
-                dy = (dims.height - dh) / 2;
-            } else {
-                dw = dims.height * imgRatio;
-                dx = (dims.width - dw) / 2;
-            }
-
-            context.fillStyle = '#000';
-            context.fillRect(0, 0, dims.width, dims.height);
-        }
-
-        if (bg.imageBlur > 0) {
-            context.filter = `blur(${bg.imageBlur}px)`;
-        }
-
-        context.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
-        context.filter = 'none';
-
-        if (bg.overlayOpacity > 0) {
-            context.fillStyle = bg.overlayColor;
-            context.globalAlpha = bg.overlayOpacity / 100;
-            context.fillRect(0, 0, dims.width, dims.height);
-            context.globalAlpha = 1;
-        }
+    } else if (bg.type === 'image') {
+        drawBackgroundImageToContext(context, dims, bg);
     }
 }
 
@@ -8693,59 +8763,8 @@ function drawBackground() {
     } else if (bg.type === 'solid') {
         ctx.fillStyle = bg.solid;
         ctx.fillRect(0, 0, dims.width, dims.height);
-    } else if (bg.type === 'image' && bg.image) {
-        const img = bg.image;
-        // Guard against broken/unloaded images (e.g. template URLs that 404).
-        // A failed Image has naturalWidth 0 and is not drawImage-valid.
-        if (!img || !img.complete || !img.naturalWidth) {
-            ctx.fillStyle = '#1a1a2e';
-            ctx.fillRect(0, 0, dims.width, dims.height);
-            return;
-        }
-        let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
-        let dx = 0, dy = 0, dw = dims.width, dh = dims.height;
-
-        if (bg.imageFit === 'cover') {
-            const imgRatio = img.width / img.height;
-            const canvasRatio = dims.width / dims.height;
-
-            if (imgRatio > canvasRatio) {
-                sw = img.height * canvasRatio;
-                sx = (img.width - sw) / 2;
-            } else {
-                sh = img.width / canvasRatio;
-                sy = (img.height - sh) / 2;
-            }
-        } else if (bg.imageFit === 'contain') {
-            const imgRatio = img.width / img.height;
-            const canvasRatio = dims.width / dims.height;
-
-            if (imgRatio > canvasRatio) {
-                dh = dims.width / imgRatio;
-                dy = (dims.height - dh) / 2;
-            } else {
-                dw = dims.height * imgRatio;
-                dx = (dims.width - dw) / 2;
-            }
-
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, dims.width, dims.height);
-        }
-
-        if (bg.imageBlur > 0) {
-            ctx.filter = `blur(${bg.imageBlur}px)`;
-        }
-
-        ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
-        ctx.filter = 'none';
-
-        // Overlay
-        if (bg.overlayOpacity > 0) {
-            ctx.fillStyle = bg.overlayColor;
-            ctx.globalAlpha = bg.overlayOpacity / 100;
-            ctx.fillRect(0, 0, dims.width, dims.height);
-            ctx.globalAlpha = 1;
-        }
+    } else if (bg.type === 'image') {
+        drawBackgroundImageToContext(ctx, dims, bg);
     }
 
     // ─── Scenic Decor Overlay ───
@@ -9074,6 +9093,35 @@ function hexToRgba(hex, alpha) {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// ─── Opaque Export ───
+// App Store Connect rejects screenshots whose PNG contains an alpha channel or
+// any transparency. The render pipeline is meant to always paint an opaque
+// background, but exports are composited onto a solid backdrop anyway so a
+// stray transparent pixel (blurred edges, transparent source images, a
+// half-loaded background) can never make a build invalid.
+function getOpaqueBackdropColor() {
+    const bg = getBackground();
+    if (bg.type === 'solid' && bg.solid) return bg.solid;
+    if (bg.type === 'gradient' && bg.gradient && bg.gradient.stops && bg.gradient.stops.length > 0) {
+        return bg.gradient.stops[0].color;
+    }
+    return '#000000';
+}
+
+// Returns the current canvas as a PNG data URL that is guaranteed alpha-free.
+// The backdrop colour is only ever visible where the canvas was transparent,
+// so this is a no-op for correctly rendered screenshots.
+function exportCanvasToOpaqueDataUrl() {
+    const flat = document.createElement('canvas');
+    flat.width = canvas.width;
+    flat.height = canvas.height;
+    const flatCtx = flat.getContext('2d');
+    flatCtx.fillStyle = getOpaqueBackdropColor();
+    flatCtx.fillRect(0, 0, flat.width, flat.height);
+    flatCtx.drawImage(canvas, 0, 0);
+    return flat.toDataURL('image/png');
+}
+
 async function exportCurrent() {
     if (state.screenshots.length === 0) {
         await showAppAlert('Please upload a screenshot first', 'info');
@@ -9085,7 +9133,7 @@ async function exportCurrent() {
 
     const link = document.createElement('a');
     link.download = `screenshot-${state.selectedIndex + 1}.png`;
-    link.href = canvas.toDataURL('image/png');
+    link.href = exportCanvasToOpaqueDataUrl();
     link.click();
 }
 
@@ -9167,7 +9215,7 @@ async function exportAllForLanguage(lang) {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         // Get canvas data as base64, strip the data URL prefix
-        const dataUrl = canvas.toDataURL('image/png');
+        const dataUrl = exportCanvasToOpaqueDataUrl();
         const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
 
         zip.file(`screenshot-${i + 1}.png`, base64Data, { base64: true });
@@ -9242,7 +9290,7 @@ async function exportAllLanguages() {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             // Get canvas data as base64, strip the data URL prefix
-            const dataUrl = canvas.toDataURL('image/png');
+            const dataUrl = exportCanvasToOpaqueDataUrl();
             const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
 
             // Use language code as folder name
