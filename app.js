@@ -654,6 +654,40 @@ function setBackground(key, value) {
     }
 }
 
+// Apply a background change to every screenshot when the "Also apply to all
+// screenshots" checkbox is ticked; otherwise just the current screenshot.
+function setBackgroundForAll(key, value) {
+    const applyAllEl = document.getElementById('bg-apply-all');
+    const applyAll = !!(applyAllEl && applyAllEl.checked && state.screenshots.length > 0);
+
+    if (!applyAll) {
+        setBackground(key, value);
+        return;
+    }
+
+    state.screenshots.forEach(s => {
+        if (!s.background) s.background = {};
+        if (key === 'image') {
+            // Share the decoded Image node across screenshots and make the
+            // image the active background type.
+            s.background.image = value;
+            s.background.type = 'image';
+        } else {
+            s.background[key] = value;
+        }
+    });
+
+    // New screenshots created later inherit the same background.
+    if (state.defaults && state.defaults.background) {
+        if (key === 'image') {
+            state.defaults.background.image = value;
+            state.defaults.background.type = 'image';
+        } else {
+            state.defaults.background[key] = value;
+        }
+    }
+}
+
 function setScreenshotSetting(key, value) {
     const screenshot = getCurrentScreenshot();
     if (screenshot) {
@@ -1706,6 +1740,19 @@ function saveState() {
         };
     });
 
+    // Sanitize the defaults background too: it can hold an HTMLImageElement
+    // (e.g. after "apply to all" or "set as default"), which IndexedDB cannot
+    // structured-clone. Persist the src instead so it survives reload.
+    let defaultsToSave = state.defaults;
+    if (defaultsToSave && defaultsToSave.background) {
+        const dbg = Object.assign({}, defaultsToSave.background);
+        dbg._bgImageSrc = (dbg.image instanceof HTMLImageElement && dbg.image.src)
+            ? dbg.image.src
+            : dbg._bgImageSrc;
+        dbg.image = dbg.image instanceof HTMLImageElement ? undefined : dbg.image;
+        defaultsToSave = Object.assign({}, defaultsToSave, { background: dbg });
+    }
+
     const stateToSave = {
         id: currentProjectId,
         formatVersion: 2, // Version 2: new 3D positioning formula
@@ -1716,7 +1763,7 @@ function saveState() {
         customHeight: state.customHeight,
         currentLanguage: state.currentLanguage,
         projectLanguages: state.projectLanguages,
-        defaults: state.defaults
+        defaults: defaultsToSave
     };
 
     // Update screenshot count in project metadata
@@ -1794,6 +1841,20 @@ function loadState() {
     if (!db) return Promise.resolve();
 
     return new Promise((resolve) => {
+        // Resolve exactly once, no matter which async branch wins the race.
+        // Previously a trailing resolve() fired synchronously, so callers
+        // (switchProject) resumed with an empty screenshot list and a project
+        // could appear "failed to open".
+        let settled = false;
+        const finish = () => {
+            if (settled) return;
+            settled = true;
+            resolve();
+        };
+        // Safety net: never leave the caller hanging if an image neither
+        // fires onload nor onerror (rare, but possible with dead blob URLs).
+        setTimeout(finish, 10000);
+
         try {
             const transaction = db.transaction([PROJECTS_STORE], 'readonly');
             const store = transaction.objectStore(PROJECTS_STORE);
@@ -1841,6 +1902,28 @@ function loadState() {
                         }
                     }
 
+                    // Apply global project state up-front so the asynchronous
+                    // screenshot population (and finish()) always sees it.
+                    state.selectedIndex = parsed.selectedIndex || 0;
+                    state.outputDevice = parsed.outputDevice || 'iphone-6.9';
+                    state.customWidth = parsed.customWidth || 1320;
+                    state.customHeight = parsed.customHeight || 2868;
+
+                    // Load global language settings
+                    state.currentLanguage = parsed.currentLanguage || 'en';
+                    state.projectLanguages = parsed.projectLanguages || ['en'];
+
+                    // Load defaults (new format) or use migrated settings
+                    if (parsed.defaults) {
+                        state.defaults = parsed.defaults;
+                        // Ensure elements array exists (may be missing from older saves)
+                        if (!state.defaults.elements) state.defaults.elements = [];
+                    } else {
+                        state.defaults.background = migratedBackground;
+                        state.defaults.screenshot = migratedScreenshot;
+                        state.defaults.text = migratedText;
+                    }
+
                     if (parsed.screenshots && parsed.screenshots.length > 0) {
                         let loadedCount = 0;
                         const totalToLoad = parsed.screenshots.length;
@@ -1874,75 +1957,21 @@ function loadState() {
                                 // New format: load all localized images
                                 const langKeys = Object.keys(s.localizedImages);
                                 let langLoadedCount = 0;
+                                let finalized = false;
                                 const localizedImages = {};
 
-                                langKeys.forEach(lang => {
-                                    const langData = s.localizedImages[lang];
-                                    if (langData?.src) {
-                                        const langImg = new Image();
-                                        langImg.onload = () => {
-                                            localizedImages[lang] = {
-                                                image: langImg,
-                                                src: langData.src,
-                                                name: langData.name || s.name
-                                            };
-                                            langLoadedCount++;
-
-                                            if (langLoadedCount === langKeys.length) {
-                                                // All language versions loaded
-                                                const firstLang = langKeys[0];
-                                                const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
-                                                if (needs3DMigration) {
-                                                    migrate3DPosition(screenshotSettings);
-                                                }
-                                                state.screenshots[index] = {
-                                                    image: localizedImages[firstLang]?.image, // Legacy compat
-                                                    name: s.name,
-                                                    deviceType: s.deviceType,
-                                                    templateId: s.templateId || null,
-                                                    localizedImages: localizedImages,
-                                                    background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
-                                                    screenshot: screenshotSettings,
-                                                    text: s.text || JSON.parse(JSON.stringify(migratedText)),
-                                                    elements: reconstructElementImages(s.elements),
-                                                    popouts: s.popouts || [],
-                                                    overrides: s.overrides || {}
-                                                };
-                                                loadedCount++;
-                                                checkAllLoaded();
-                                            }
-                                        };
-                                        langImg.src = langData.src;
-                                    } else {
-                                        langLoadedCount++;
-                                        if (langLoadedCount === langKeys.length) {
-                                            loadedCount++;
-                                            checkAllLoaded();
-                                        }
-                                    }
-                                });
-                            } else {
-                                // Old format: migrate to localized images
-                                const img = new Image();
-                                img.onload = () => {
-                                    // Detect language from filename, default to 'en'
-                                    const detectedLang = typeof detectLanguageFromFilename === 'function'
-                                        ? detectLanguageFromFilename(s.name || '')
-                                        : 'en';
-
-                                    const localizedImages = {};
-                                    localizedImages[detectedLang] = {
-                                        image: img,
-                                        src: s.src,
-                                        name: s.name
-                                    };
-
+                                const finalizeLocalized = () => {
+                                    if (finalized) return;
+                                    finalized = true;
+                                    const firstWithImage = langKeys
+                                        .map(k => localizedImages[k])
+                                        .find(v => v && v.image) || null;
                                     const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
                                     if (needs3DMigration) {
                                         migrate3DPosition(screenshotSettings);
                                     }
                                     state.screenshots[index] = {
-                                        image: img,
+                                        image: firstWithImage ? firstWithImage.image : null, // Legacy compat
                                         name: s.name,
                                         deviceType: s.deviceType,
                                         templateId: s.templateId || null,
@@ -1957,6 +1986,81 @@ function loadState() {
                                     loadedCount++;
                                     checkAllLoaded();
                                 };
+
+                                langKeys.forEach(lang => {
+                                    const langData = s.localizedImages[lang];
+                                    if (langData?.src) {
+                                        const langImg = new Image();
+                                        langImg.onload = () => {
+                                            localizedImages[lang] = {
+                                                image: langImg,
+                                                src: langData.src,
+                                                name: langData.name || s.name
+                                            };
+                                            langLoadedCount++;
+                                            if (langLoadedCount === langKeys.length) finalizeLocalized();
+                                        };
+                                        // A dead/invalid src must still produce a
+                                        // screenshot entry, otherwise the whole
+                                        // project loads with missing screens.
+                                        langImg.onerror = () => {
+                                            localizedImages[lang] = {
+                                                image: null,
+                                                src: langData.src,
+                                                name: langData.name || s.name
+                                            };
+                                            langLoadedCount++;
+                                            if (langLoadedCount === langKeys.length) finalizeLocalized();
+                                        };
+                                        langImg.src = langData.src;
+                                    } else {
+                                        langLoadedCount++;
+                                        if (langLoadedCount === langKeys.length) finalizeLocalized();
+                                    }
+                                });
+                            } else {
+                                // Old format: migrate to localized images
+                                const img = new Image();
+                                let finalized = false;
+                                const finalizeOldFormat = (loadedImage) => {
+                                    if (finalized) return;
+                                    finalized = true;
+                                    // Detect language from filename, default to 'en'
+                                    const detectedLang = typeof detectLanguageFromFilename === 'function'
+                                        ? detectLanguageFromFilename(s.name || '')
+                                        : 'en';
+
+                                    const localizedImages = {};
+                                    localizedImages[detectedLang] = {
+                                        image: loadedImage,
+                                        src: s.src,
+                                        name: s.name
+                                    };
+
+                                    const screenshotSettings = s.screenshot || JSON.parse(JSON.stringify(migratedScreenshot));
+                                    if (needs3DMigration) {
+                                        migrate3DPosition(screenshotSettings);
+                                    }
+                                    state.screenshots[index] = {
+                                        image: loadedImage,
+                                        name: s.name,
+                                        deviceType: s.deviceType,
+                                        templateId: s.templateId || null,
+                                        localizedImages: localizedImages,
+                                        background: s.background || JSON.parse(JSON.stringify(migratedBackground)),
+                                        screenshot: screenshotSettings,
+                                        text: s.text || JSON.parse(JSON.stringify(migratedText)),
+                                        elements: reconstructElementImages(s.elements),
+                                        popouts: s.popouts || [],
+                                        overrides: s.overrides || {}
+                                    };
+                                    loadedCount++;
+                                    checkAllLoaded();
+                                };
+                                img.onload = () => finalizeOldFormat(img);
+                                // Keep the screenshot (without an image) if the
+                                // stored src can no longer be decoded.
+                                img.onerror = () => finalizeOldFormat(null);
                                 img.src = s.src;
                             }
                         });
@@ -1975,20 +2079,26 @@ function loadState() {
                                         if (typeof updateScreenshotList === 'function') updateScreenshotList();
                                     }
                                 };
+                                var bgTargets = [];
                                 state.screenshots.forEach(function(ss) {
-                                    if (!ss || !ss.background) return;
-                                    var url = ss.background._overlayUrl ||
-                                              ss.background._pendingImageUrl ||
-                                              ss.background._bgImageSrc;
+                                    if (ss && ss.background) bgTargets.push(ss.background);
+                                });
+                                if (state.defaults && state.defaults.background) {
+                                    bgTargets.push(state.defaults.background);
+                                }
+                                bgTargets.forEach(function(bg) {
+                                    var url = bg._overlayUrl ||
+                                              bg._pendingImageUrl ||
+                                              bg._bgImageSrc;
                                     // Also handle templates that stored image as a URL string
-                                    if (!url && typeof ss.background.image === 'string') {
-                                        url = ss.background.image;
+                                    if (!url && typeof bg.image === 'string') {
+                                        url = bg.image;
                                     }
-                                    if (url && !(ss.background.image instanceof HTMLImageElement)) {
+                                    if (url && !(bg.image instanceof HTMLImageElement)) {
                                         pendingBgLoads++;
                                         var bgImg = new Image();
                                         bgImg.onload = function() {
-                                            ss.background.image = bgImg;
+                                            bg.image = bgImg;
                                             bgLoadDone();
                                         };
                                         bgImg.onerror = function() { bgLoadDone(); };
@@ -2005,9 +2115,10 @@ function loadState() {
                                     showMigrationPrompt();
                                 }
 
-                                // Resolve AFTER checkAllLoaded completes, so
-                                // switchProject sees the full screenshot list.
-                                resolve();
+                                // Resolve only once every screenshot is in
+                                // state.screenshots, so switchProject sees the
+                                // full list instead of an empty project.
+                                finish();
                             }
                         }
                     } else {
@@ -2016,43 +2127,23 @@ function loadState() {
                         syncUIWithState();
                         updateGradientStopsUI();
                         updateCanvas();
-                        resolve();
-                    }
-
-                    state.selectedIndex = parsed.selectedIndex || 0;
-                    state.outputDevice = parsed.outputDevice || 'iphone-6.9';
-                    state.customWidth = parsed.customWidth || 1320;
-                    state.customHeight = parsed.customHeight || 2868;
-
-                    // Load global language settings
-                    state.currentLanguage = parsed.currentLanguage || 'en';
-                    state.projectLanguages = parsed.projectLanguages || ['en'];
-
-                    // Load defaults (new format) or use migrated settings
-                    if (parsed.defaults) {
-                        state.defaults = parsed.defaults;
-                        // Ensure elements array exists (may be missing from older saves)
-                        if (!state.defaults.elements) state.defaults.elements = [];
-                    } else {
-                        state.defaults.background = migratedBackground;
-                        state.defaults.screenshot = migratedScreenshot;
-                        state.defaults.text = migratedText;
+                        finish();
                     }
                 } else {
                     // New project, reset to defaults
                     resetStateToDefaults();
                     updateScreenshotList();
+                    finish();
                 }
-                resolve();
             };
 
             request.onerror = () => {
                 console.error('Error loading state:', request.error);
-                resolve();
+                finish();
             };
         } catch (e) {
             console.error('Error loading state:', e);
-            resolve();
+            finish();
         }
     });
 }
@@ -2182,11 +2273,18 @@ async function switchProject(projectId) {
     resetStateToDefaults();
     await loadState();
 
-    syncUIWithState();
-    updateScreenshotList();
-    updateGradientStopsUI();
-    updateProjectSelector();
-    updateCanvas();
+    // UI refresh must never reject the switch: a rendering hiccup would
+    // otherwise surface as "failed to open project" even though the project
+    // loaded fine.
+    try {
+        syncUIWithState();
+        updateScreenshotList();
+        updateGradientStopsUI();
+        updateProjectSelector();
+        updateCanvas();
+    } catch (e) {
+        console.error('Error refreshing UI after project switch:', e);
+    }
 }
 
 // Generate a placeholder screenshot image so device frames are visible
@@ -2542,14 +2640,22 @@ async function duplicateProject(sourceProjectId, customName) {
             writeStore.put(clonedData);
 
             writeTransaction.oncomplete = async () => {
+                // The copy is already committed to the database at this point,
+                // so duplication has succeeded. Opening it is a separate,
+                // best-effort step — a failure there must not be reported as a
+                // failed copy.
                 try {
                     await switchProject(newId);
-                    updateProjectSelector();
-                    resolve(true);
                 } catch (e) {
                     console.error('Error switching to duplicated project:', e);
-                    fail('Project copied, but failed to open it');
+                    try {
+                        await switchProject(newId);
+                    } catch (e2) {
+                        console.error('Retry failed to open duplicated project:', e2);
+                    }
                 }
+                updateProjectSelector();
+                resolve(true);
             };
             writeTransaction.onerror = () => fail('Could not save project data');
             writeTransaction.onabort = () => fail('Could not save project data');
@@ -4388,7 +4494,9 @@ function setupEventListeners() {
 
     document.getElementById('new-project-btn').addEventListener('click', () => {
         document.getElementById('project-modal-title').textContent = 'New Project';
-        document.getElementById('project-name-input').value = '';
+        const nameInput = document.getElementById('project-name-input');
+        nameInput.value = '';
+        nameInput.dataset.autofilled = 'false';
         document.getElementById('project-modal-confirm').textContent = 'Create';
         document.getElementById('project-modal').dataset.mode = 'new';
 
@@ -4417,16 +4525,27 @@ function setupEventListeners() {
         document.getElementById('project-name-input').focus();
     });
 
+    // Changing the "Duplicate from" source only auto-fills the name while the
+    // field is empty or still holds a previous auto-generated value. A name the
+    // user typed is never overwritten.
+    const projectNameInput = document.getElementById('project-name-input');
+    projectNameInput.addEventListener('input', () => {
+        projectNameInput.dataset.autofilled = 'false';
+    });
+
     document.getElementById('duplicate-from-select').addEventListener('change', (e) => {
         const selectedId = e.target.value;
+        const isAutofilled = projectNameInput.dataset.autofilled === 'true';
+        const isEmpty = projectNameInput.value.trim() === '';
+        if (!isAutofilled && !isEmpty) return;
+
+        let nextName = '';
         if (selectedId) {
             const selectedProject = projects.find(p => p.id === selectedId);
-            if (selectedProject) {
-                document.getElementById('project-name-input').value = selectedProject.name + ' (Copy)';
-            }
-        } else {
-            document.getElementById('project-name-input').value = '';
+            if (selectedProject) nextName = selectedProject.name + ' (Copy)';
         }
+        projectNameInput.value = nextName;
+        projectNameInput.dataset.autofilled = nextName ? 'true' : 'false';
     });
 
     document.getElementById('rename-project-btn').addEventListener('click', () => {
@@ -5062,7 +5181,7 @@ function setupEventListeners() {
                 var dataUrl = event.target.result;
                 var img = new Image();
                 img.onload = function() {
-                    setBackground('image', img);
+                    setBackgroundForAll('image', img);
                     var preview = document.getElementById('bg-image-preview');
                     if (preview) { preview.src = dataUrl; preview.style.display = 'block'; }
                     addBgToRecentCache(dataUrl);
@@ -5076,24 +5195,24 @@ function setupEventListeners() {
     });
 
     document.getElementById('bg-image-fit').addEventListener('change', (e) => {
-        setBackground('imageFit', e.target.value);
+        setBackgroundForAll('imageFit', e.target.value);
         updateCanvas();
     });
 
     document.getElementById('bg-blur').addEventListener('input', (e) => {
-        setBackground('imageBlur', parseInt(e.target.value));
+        setBackgroundForAll('imageBlur', parseInt(e.target.value));
         document.getElementById('bg-blur-value').textContent = formatValue(e.target.value) + 'px';
         updateCanvas();
     });
 
     document.getElementById('bg-overlay-color').addEventListener('input', (e) => {
-        setBackground('overlayColor', e.target.value);
+        setBackgroundForAll('overlayColor', e.target.value);
         document.getElementById('bg-overlay-hex').value = e.target.value;
         updateCanvas();
     });
 
     document.getElementById('bg-overlay-opacity').addEventListener('input', (e) => {
-        setBackground('overlayOpacity', parseInt(e.target.value));
+        setBackgroundForAll('overlayOpacity', parseInt(e.target.value));
         document.getElementById('bg-overlay-opacity-value').textContent = formatValue(e.target.value) + '%';
         updateCanvas();
     });
@@ -8144,7 +8263,7 @@ function renderBgImageRecents() {
         thumb.addEventListener('click', function() {
             var img = new Image();
             img.onload = function() {
-                setBackground('image', img);
+                setBackgroundForAll('image', img);
                 var preview = document.getElementById('bg-image-preview');
                 if (preview) { preview.src = dataUrl; preview.style.display = 'block'; }
                 document.querySelectorAll('.bg-image-recent-thumb').forEach(function(t) { t.classList.remove('active'); });
