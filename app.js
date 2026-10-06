@@ -3,7 +3,7 @@ const state = {
     screenshots: [],
     selectedIndex: 0,
     transferTarget: null, // Index of screenshot waiting to receive style transfer
-    outputDevice: 'iphone-6.9',
+    outputDevice: 'iphone-6.3',
     currentLanguage: 'en', // Global current language for all text
     projectLanguages: ['en'], // Languages available in this project
     customWidth: 1290,
@@ -1368,6 +1368,7 @@ function updateElementFontPickerPreview(el) {
 
 // Device dimensions
 const deviceDimensions = {
+    'iphone-6.3': { width: 1206, height: 2622 },
     'iphone-6.9': { width: 1320, height: 2868 },
     'iphone-6.7': { width: 1290, height: 2796 },
     'iphone-6.5': { width: 1284, height: 2778 },
@@ -1905,7 +1906,7 @@ function loadState() {
                     // Apply global project state up-front so the asynchronous
                     // screenshot population (and finish()) always sees it.
                     state.selectedIndex = parsed.selectedIndex || 0;
-                    state.outputDevice = parsed.outputDevice || 'iphone-6.9';
+                    state.outputDevice = parsed.outputDevice || 'iphone-6.3';
                     state.customWidth = parsed.customWidth || 1320;
                     state.customHeight = parsed.customHeight || 2868;
 
@@ -2173,7 +2174,7 @@ function convertProject() {
 function resetStateToDefaults() {
     state.screenshots = [];
     state.selectedIndex = 0;
-    state.outputDevice = 'iphone-6.9';
+    state.outputDevice = 'iphone-6.3';
     state.customWidth = 1320;
     state.customHeight = 2868;
     state.currentLanguage = 'en';
@@ -2292,7 +2293,7 @@ async function switchProject(projectId) {
 function generatePlaceholderScreenshot(deviceType) {
     const dims = deviceType === 'custom'
         ? { width: state.customWidth, height: state.customHeight }
-        : (deviceDimensions[deviceType] || deviceDimensions['iphone-6.9']);
+        : (deviceDimensions[deviceType] || deviceDimensions['iphone-6.3']);
     const c = document.createElement('canvas');
     c.width = dims.width;
     c.height = dims.height;
