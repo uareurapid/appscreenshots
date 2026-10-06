@@ -28,6 +28,7 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 ### Device Mockups
 - **2D Mode**: Position, scale, rotate, and adjust corner radius of screenshots
 - **3D Mode**: Interactive iPhone 15 Pro Max 3D mockup with drag-to-rotate
+- **iPhone Duo (foldable)**: Uses its own App Store sizes instead of the selected output size — the unfolded inner screen exports in landscape at 2853 × 2007 and the folded outer screen in portrait at 1398 × 2034. "Add Duo Pair" creates both screenshots at once. The inner screen can be shown partly folded (an "Unfold Amount" slider) — the screenshot bends with the hinge instead of floating flat over it
 - **Position Presets**: Centered, bleed, tilt left/right, perspective, and more
 - **Shadow Effects**: Customizable drop shadows with color, blur, opacity, and offset
 - **Border Effects**: Add borders around screenshots with adjustable width and opacity
@@ -150,7 +151,7 @@ docker compose -f docker-compose.build.yml up -d
 2. **Choose Output Size**: Select the target device size from the sidebar
 3. **Customize Background**: Choose gradient, solid color, or image background
 4. **Position Screenshot**: Use presets or manually adjust scale, position, and rotation
-5. **Switch to 3D** (optional): Enable 3D mode for interactive iPhone mockup
+5. **Switch to 3D** (optional): Enable 3D mode for interactive iPhone mockup — pick the iPhone Duo model, choose its folded or unfolded pose, and use "Add Duo Pair" to create both screenshots at once
 6. **Add Text**: Enter your headline and optional subheadline
 7. **Export**: Download the current screenshot or export all at once as ZIP
 
@@ -208,3 +209,18 @@ MIT License - feel free to use, modify, and distribute.
 ## Author
 
 Proudly vibe coded by [Stefan](https://github.com/BlackMac) at [YuzuHub](https://yuzuhub.com/en) — building smart AI products from Düsseldorf, Germany.
+
+HOW TO:
+# primary (what's running now)
+npm run serve            # alias for: python3 -m http.server 8000
+
+# or directly
+python3 -m http.server 8000
+
+# fallback if you don't have Python
+npx serve .
+
+npm install      # once, for @tauri-apps/cli
+npm run tauri:dev
+
+docker compose up -d     # serves on http://localhost:8080

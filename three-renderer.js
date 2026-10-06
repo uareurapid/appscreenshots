@@ -38,6 +38,43 @@ const deviceConfigs = {
         cornerRadiusFactor: 0.16,
         modelRotation: { x: 0, y: 0, z: 0 }  // No correction needed
     },
+    'iphone-duo': {
+        modelPath: 'models/iphone-duo.glb',
+        // Hinge rig: Bone_01 articulates one half. 0° lays the device flat
+        // (inner display showing), 180° closes it (outer/cover display showing).
+        // Each pose has its own canvas orientation, so each is scaled to fill
+        // its own viewport (see the per-pose sizeFactor values below).
+        sizeFactor: 1.26,
+        cornerRadiusFactor: 0.06,
+        modelRotation: { x: 0, y: 0, z: 0 },
+        defaultPose: 'unfolded',
+        poses: {
+            unfolded: {
+                bones: { Bone_Hinge: 0, Bone_01: 0 },
+                // Partial unfold: the hinge angle is 180° * (1 - unfoldPercent/100),
+                // where 100% is flat open and 0% is fully closed. `foldHingeZ` is the
+                // depth of the inner display surface, i.e. the real hinge axis.
+                foldBone: 'Bone_01',
+                foldHingeZ: 0.0024,
+                aspectRatio: 0.1586 / 0.1109,
+                screenHeightFactor: 0.1109 / 4.3,
+                screenOffset: { x: 0.000, y: 0.0589, z: 0.0055 },
+                fitScreen: true,
+                // Landscape canvas: the wide, open device is height-constrained.
+                sizeFactor: 1.26
+            },
+            folded: {
+                bones: { Bone_Hinge: 0, Bone_01: 180 },
+                aspectRatio: 0.0779 / 0.1104,
+                screenHeightFactor: 0.1104 / 4.3,
+                screenOffset: { x: 0.0409, y: 0.0591, z: 0.0105 },
+                fitScreen: true,
+                // Portrait canvas (1398x2034): the folded device is the width
+                // constraint, so it is scaled to fill that viewport.
+                sizeFactor: 1.24
+            }
+        }
+    },
     samsung: {
         modelPath: 'models/samsung-galaxy-s25-ultra.glb',
         aspectRatio: 1440 / 3120,
@@ -57,6 +94,201 @@ const deviceConfigs = {
         modelRotation: { x: 0, y: 0, z: 0 }
     }
 };
+
+// Models are normalised so their largest dimension spans 3.75 units, which
+// assumes a portrait device. Models that are wider than they are tall (e.g. the
+// unfolded foldable) would then overflow the viewport, so a config may shrink
+// them further via `sizeFactor` — optionally per pose, since a foldable's two
+// poses are framed in viewports of different orientations.
+function getPoseSizeFactor(deviceType, settings) {
+    const config = deviceConfigs[deviceType];
+    if (!config) return 1;
+    const poseName = getActivePoseName(deviceType, settings);
+    const pose = poseName ? config.poses[poseName] : null;
+    return (pose && pose.sizeFactor) || config.sizeFactor || 1;
+}
+
+function getModelBaseScale(size, deviceType, settings) {
+    const maxDim = Math.max(size?.x || 1, size?.y || 1, size?.z || 1);
+    return (3.75 / maxDim) * getPoseSizeFactor(deviceType, settings);
+}
+
+// Devices with a `poses` map (the foldable) can be articulated. The pose is
+// chosen per screenshot via its `duoState`; every other device just uses the
+// flat top-level screen values.
+function getActivePoseName(deviceType, settings) {
+    const config = deviceConfigs[deviceType];
+    if (!config || !config.poses) return null;
+    const ss = settings || (typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : null);
+    const wanted = ss?.duoState || config.defaultPose;
+    return config.poses[wanted] ? wanted : config.defaultPose;
+}
+
+// Screen plane geometry for the given device and pose.
+function getScreenSpec(deviceType, settings) {
+    const config = deviceConfigs[deviceType] || deviceConfigs.iphone;
+    const poseName = getActivePoseName(deviceType, settings);
+    const pose = poseName ? config.poses[poseName] : null;
+    return {
+        aspectRatio: pose ? pose.aspectRatio : config.aspectRatio,
+        screenHeightFactor: pose ? pose.screenHeightFactor : config.screenHeightFactor,
+        screenOffset: pose ? pose.screenOffset : config.screenOffset,
+        fitScreen: pose ? !!pose.fitScreen : !!config.fitScreen,
+        cornerRadiusFactor: config.cornerRadiusFactor || 0.06,
+        // Poses that hinge open (the foldable's inner display) bend the overlay
+        // at the crease so the screenshot follows the display. `foldHingeZ` is
+        // the display's surface depth, i.e. where the hinge axis really sits.
+        foldRadians: pose && pose.foldBone
+            ? THREE.MathUtils.degToRad(180 * (1 - getUnfoldPercent(settings) / 100))
+            : 0,
+        hingeZ: pose && pose.foldBone ? (pose.foldHingeZ || 0) - pose.screenOffset.z : 0
+    };
+}
+
+// Below this the foldable's own body starts to cover the tilted half of the
+// display, so the screenshot would be clipped.
+const MIN_UNFOLD_PERCENT = 70;
+
+function getUnfoldPercent(settings) {
+    const ss = settings || (typeof getScreenshotSettings === 'function' ? getScreenshotSettings() : null);
+    const value = Number(ss?.unfoldPercent);
+    if (!Number.isFinite(value)) return 100;
+    return Math.min(100, Math.max(MIN_UNFOLD_PERCENT, value));
+}
+
+// Articulate the hinge rig for the pose the screenshot is using.
+function applyDevicePose(model, deviceType, settings) {
+    const config = deviceConfigs[deviceType];
+    const poseName = getActivePoseName(deviceType, settings);
+    if (!config || !poseName || !config.poses[poseName].bones) return;
+    const bones = Object.assign({}, config.poses[poseName].bones);
+    const foldBone = config.poses[poseName].foldBone;
+    if (foldBone) {
+        // 100% unfolded is flat (0°); fully closed is 180°.
+        bones[foldBone] = 180 * (1 - getUnfoldPercent(settings) / 100);
+    }
+    model.traverse((o) => {
+        if (!o.isBone) return;
+        Object.keys(bones).forEach((bone) => {
+            if (o.name === bone || o.name.startsWith(bone + '_')) {
+                o.rotation.x = THREE.MathUtils.degToRad(bones[bone]);
+            }
+        });
+    });
+    model.updateMatrixWorld(true);
+}
+
+// Builds the screen quad. A device whose pose hinges (the foldable) gets its two
+// halves as separate quads so the left one can pivot at the hinge and the
+// screenshot bends exactly like the display underneath. `hingeZ` is how far the
+// real hinge axis sits behind the overlay plane.
+function createScreenGeometry(width, height, foldRadians, hingeZ) {
+    if (!foldRadians) return new THREE.PlaneGeometry(width, height);
+
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+    const cos = Math.cos(foldRadians);
+    const sin = Math.sin(foldRadians);
+    const positions = [];
+    const uvs = [];
+    const addQuad = (fromX, toX, hinged) => {
+        [[fromX, -halfHeight], [toX, -halfHeight], [toX, halfHeight], [fromX, halfHeight]]
+            .forEach(([x, y]) => {
+                let px = x;
+                let pz = 0;
+                if (hinged) {
+                    px = x * cos + hingeZ * sin;
+                    pz = -x * sin + hingeZ * cos - hingeZ;
+                }
+                positions.push(px, y, pz);
+                uvs.push((x + halfWidth) / width, (y + halfHeight) / height);
+            });
+    };
+    addQuad(-halfWidth, 0, true);
+    addQuad(0, halfWidth, false);
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex([0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7]);
+    return geometry;
+}
+
+// Resize and reposition an existing screen plane to match a screen spec.
+function applyScreenSpec(plane, spec) {
+    const planeHeight = 4.3 * spec.screenHeightFactor;
+    const planeWidth = planeHeight * spec.aspectRatio;
+    const foldRadians = spec.foldRadians || 0;
+    const hingeZ = spec.hingeZ || 0;
+    const applied = plane.userData.appliedScreenSpec;
+
+    if (!applied
+        || Math.abs(applied.width - planeWidth) > 1e-6
+        || Math.abs(applied.height - planeHeight) > 1e-6
+        || Math.abs(applied.foldRadians - foldRadians) > 1e-6
+        || Math.abs(applied.hingeZ - hingeZ) > 1e-6) {
+        plane.geometry.dispose();
+        plane.geometry = createScreenGeometry(planeWidth, planeHeight, foldRadians, hingeZ);
+        plane.userData.appliedScreenSpec = { width: planeWidth, height: planeHeight, foldRadians, hingeZ };
+    }
+    plane.position.set(spec.screenOffset.x, spec.screenOffset.y, spec.screenOffset.z);
+}
+
+// Snapshot the articulation of a model plus its screen plane size/position, so a
+// temporary pose used while rendering a side preview can be reverted afterwards.
+function capturePoseState(model, plane) {
+    const bones = [];
+    if (model) {
+        model.traverse((o) => {
+            if (o.isBone) bones.push([o, o.rotation.x]);
+        });
+    }
+    return {
+        bones,
+        modelPosition: model ? model.position.clone() : null,
+        modelScale: model ? model.scale.x : null,
+        planeState: plane
+            ? { spec: plane.userData.appliedScreenSpec, position: plane.position.clone() }
+            : null
+    };
+}
+
+// Pose a model, scale it for that pose's viewport, centre it on that pose's
+// screen, and size its screen plane. `modelSize` is only needed when the model
+// has not been through a config-driven load (it is cached on the model itself).
+function applyPoseState(model, plane, deviceType, settings, modelSize) {
+    if (model) {
+        const scale = getModelBaseScale(modelSize || model.userData.modelSize, deviceType, settings);
+        model.scale.setScalar(scale);
+        model.userData.appliedSizeFactor = getPoseSizeFactor(deviceType, settings);
+        applyDevicePose(model, deviceType, settings);
+        const off = getScreenSpec(deviceType, settings).screenOffset;
+        model.position.set(-off.x * scale, -off.y * scale, -off.z * scale);
+    }
+    if (plane) applyScreenSpec(plane, getScreenSpec(deviceType, settings));
+}
+
+function restorePoseState(model, plane, snapshot) {
+    if (!snapshot) return;
+    snapshot.bones.forEach(([bone, x]) => {
+        bone.rotation.x = x;
+    });
+    if (model && snapshot.modelPosition) model.position.copy(snapshot.modelPosition);
+    if (model && snapshot.modelScale) model.scale.setScalar(snapshot.modelScale);
+    if (snapshot.planeState && plane) {
+        const { spec } = snapshot.planeState;
+        if (spec) {
+            applyScreenSpec(plane, {
+                screenHeightFactor: spec.height / 4.3,
+                aspectRatio: spec.width / spec.height,
+                screenOffset: snapshot.planeState.position,
+                foldRadians: spec.foldRadians,
+                hingeZ: spec.hingeZ
+            });
+        }
+    }
+    if (model) model.updateMatrixWorld(true);
+}
 
 // Frame color presets per device (real device colors)
 // Using var so it's accessible from app.js
@@ -108,6 +340,18 @@ var frameColorPresets = {
           materials: { backpanel: '#7d6da0', metalframe: '#5c4d78', gray: '#1e1825' } },
         { id: 'blue', label: 'Blue', swatch: '#6b859c',
           materials: { backpanel: '#6b859c', metalframe: '#4b6378', gray: '#1a1f24' } },
+    ],
+    // The foldable is authored with named colourway materials, so presets target
+    // those material names directly instead of the generic iphone ones.
+    'iphone-duo': [
+        { id: 'starwhite', label: 'Star White', swatch: '#e8e5df',
+          materials: { c_starwhite_side: '#e8e5df', c_starwhite_backpanel: '#efede8', c_sw_side_matte: '#d5d2cc', c_sw_backpanel_inner: '#dcd9d3' } },
+        { id: 'black', label: 'Space Black', swatch: '#3a3632',
+          materials: { c_starwhite_side: '#3a3632', c_starwhite_backpanel: '#2b2825', c_sw_side_matte: '#262320', c_sw_backpanel_inner: '#201e1b' } },
+        { id: 'blue', label: 'Deep Blue', swatch: '#5b7fa6',
+          materials: { c_starwhite_side: '#5b7fa6', c_starwhite_backpanel: '#4a6a8c', c_sw_side_matte: '#3f5b78', c_sw_backpanel_inner: '#3a5470' } },
+        { id: 'silver', label: 'Silver', swatch: '#c9cbcd',
+          materials: { c_starwhite_side: '#c9cbcd', c_starwhite_backpanel: '#d8dadd', c_sw_side_matte: '#b4b7ba', c_sw_backpanel_inner: '#bcc0c3' } },
     ]
 };
 
@@ -238,19 +482,36 @@ function initThreeJS() {
 }
 
 // Load the phone 3D model based on currentDeviceModel
+// Frees a detached model's GPU resources.
+function disposeObjectTree(root) {
+    root.traverse((child) => {
+        if (!child.isMesh) return;
+        child.geometry?.dispose();
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        materials.forEach((material) => material?.dispose());
+    });
+}
+
 function loadPhoneModel() {
     if (phoneModelLoading) return; // Prevent double loading
     phoneModelLoading = true;
 
-    const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
+    const requestedDevice = currentDeviceModel;
+    const config = deviceConfigs[requestedDevice] || deviceConfigs.iphone;
     const loader = new THREE.GLTFLoader();
 
     loader.load(
         config.modelPath,
         (gltf) => {
             phoneModelLoading = false;
+            // Another model was requested while this one was still downloading;
+            // adding it now would leave a ghost device in the scene.
+            if (currentDeviceModel !== requestedDevice) {
+                disposeObjectTree(gltf.scene);
+                return;
+            }
             phoneModel = gltf.scene;
-
+            applyDevicePose(phoneModel, currentDeviceModel);
             // Center and scale the model
             const box = new THREE.Box3().setFromObject(phoneModel);
             const center = box.getCenter(new THREE.Vector3());
@@ -260,8 +521,8 @@ function loadPhoneModel() {
             phoneModel.position.sub(center);
 
             // Scale to fit view (3.75 = 2.5 * 1.5 to match 2D scale at 100%)
-            const maxDim = Math.max(size.x, size.y, size.z);
-            baseModelScale = 3.75 / maxDim;
+            phoneModel.userData.modelSize = size.clone();
+            baseModelScale = getModelBaseScale(size, currentDeviceModel);
             phoneModel.scale.setScalar(baseModelScale);
 
             // Log all meshes to help identify the screen
@@ -314,8 +575,7 @@ function loadPhoneModel() {
             }
 
             // Create a pivot group for rotation around screen center
-            const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
-            const screenOffset = config.screenOffset;
+            const screenOffset = getScreenSpec(currentDeviceModel).screenOffset;
 
             phonePivot = new THREE.Group();
 
@@ -377,7 +637,6 @@ function loadPhoneModel() {
 // Procedural iPad model — a rounded-rect body with screen cutout.
 // Used when no iPad .glb file is available.
 function createProceduralIpad() {
-    const config = deviceConfigs.ipad;
     const w = 2.2;  // width
     const h = 3.0;  // height
     const d = 0.08; // depth
@@ -408,7 +667,7 @@ function createProceduralIpad() {
 
     // Pivot
     phonePivot = new THREE.Group();
-    const screenOffset = config.screenOffset;
+    const screenOffset = getScreenSpec('ipad').screenOffset;
     phoneModel.position.set(
         -screenOffset.x * baseModelScale,
         -screenOffset.y * baseModelScale,
@@ -491,7 +750,13 @@ function switchPhoneModel(deviceType) {
     loader.load(
         config.modelPath,
         (gltf) => {
+            // A newer model was requested while this one was downloading.
+            if (currentDeviceModel !== deviceType) {
+                disposeObjectTree(gltf.scene);
+                return;
+            }
             phoneModel = gltf.scene;
+            applyDevicePose(phoneModel, currentDeviceModel);
 
             // Center and scale the model
             const box = new THREE.Box3().setFromObject(phoneModel);
@@ -500,12 +765,12 @@ function switchPhoneModel(deviceType) {
 
             phoneModel.position.sub(center);
 
-            const maxDim = Math.max(size.x, size.y, size.z);
-            baseModelScale = 3.75 / maxDim;
+            phoneModel.userData.modelSize = size.clone();
+            baseModelScale = getModelBaseScale(size, currentDeviceModel);
             phoneModel.scale.setScalar(baseModelScale);
 
             // Create a pivot group for rotation around screen center
-            const screenOffset = config.screenOffset;
+            const screenOffset = getScreenSpec(currentDeviceModel).screenOffset;
             phonePivot = new THREE.Group();
 
             // Offset the phone model so the screen center is at the pivot's origin
@@ -579,6 +844,10 @@ function loadCachedPhoneModel(deviceType) {
             config.modelPath,
             (gltf) => {
                 const model = gltf.scene;
+                // Cached models are shared between previews, so they start in the
+                // default pose and get re-posed per render by renderThreeJSForScreenshot.
+                const defaultSettings = { duoState: config.defaultPose };
+                applyDevicePose(model, deviceType, defaultSettings);
 
                 // Center and scale the model
                 const box = new THREE.Box3().setFromObject(model);
@@ -587,12 +856,14 @@ function loadCachedPhoneModel(deviceType) {
 
                 model.position.sub(center);
 
-                const maxDim = Math.max(size.x, size.y, size.z);
-                const modelBaseScale = 3.75 / maxDim;
+                const modelBaseScale = getModelBaseScale(size, deviceType, defaultSettings);
                 model.scale.setScalar(modelBaseScale);
+                model.userData.modelSize = size.clone();
+                model.userData.appliedSizeFactor = getPoseSizeFactor(deviceType, defaultSettings);
 
                 // Create pivot for this model
-                const screenOffset = config.screenOffset;
+                const spec = getScreenSpec(deviceType, defaultSettings);
+                const screenOffset = spec.screenOffset;
                 const pivot = new THREE.Group();
 
                 model.position.set(
@@ -604,8 +875,8 @@ function loadCachedPhoneModel(deviceType) {
                 pivot.add(model);
 
                 // Create screen plane for this model
-                const aspectRatio = config.aspectRatio;
-                const planeHeight = 4.3 * config.screenHeightFactor;
+                const aspectRatio = spec.aspectRatio;
+                const planeHeight = 4.3 * spec.screenHeightFactor;
                 const planeWidth = planeHeight * aspectRatio;
 
                 const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
@@ -667,10 +938,11 @@ function createScreenOverlay() {
     }
 
     const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
+    const spec = getScreenSpec(currentDeviceModel);
 
-    // Use device-specific aspect ratio and screen size
-    const aspectRatio = config.aspectRatio;
-    const planeHeight = 4.3 * config.screenHeightFactor;
+    // Use device/pose-specific aspect ratio and screen size
+    const aspectRatio = spec.aspectRatio;
+    const planeHeight = 4.3 * spec.screenHeightFactor;
     const planeWidth = planeHeight * aspectRatio;
 
     const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
@@ -682,7 +954,7 @@ function createScreenOverlay() {
     customScreenPlane = new THREE.Mesh(geometry, material);
 
     // Position at center of phone, slightly in front of glass
-    const screenOffset = config.screenOffset;
+    const screenOffset = spec.screenOffset;
     customScreenPlane.position.set(screenOffset.x, screenOffset.y, screenOffset.z);
 
     // Counter-rotate the screen to cancel out the model's base rotation
@@ -735,9 +1007,53 @@ function createRoundedScreenImage(image, cornerRadius) {
     return canvas;
 }
 
+// Builds the screen image texture for a device. A screenshot whose aspect ratio
+// differs from the display is stretched to fill it by default; devices that set
+// `fitScreen` (e.g. the foldable, whose inner display is landscape) letterbox it
+// instead so the screenshot keeps its proportions.
+function createScreenImage(image, spec) {
+    let source = image;
+    if (spec.fitScreen) {
+        const fitted = document.createElement('canvas');
+        fitted.width = image.width;
+        fitted.height = Math.round(image.width / spec.aspectRatio);
+        const ctx = fitted.getContext('2d');
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, fitted.width, fitted.height);
+        const scale = Math.min(fitted.width / image.width, fitted.height / image.height);
+        const w = image.width * scale;
+        const h = image.height * scale;
+        ctx.drawImage(image, (fitted.width - w) / 2, (fitted.height - h) / 2, w, h);
+        source = fitted;
+    }
+    return createRoundedScreenImage(source, Math.round(source.width * spec.cornerRadiusFactor));
+}
+
+// Keep the loaded model's pose and screen plane matched to the current screenshot.
+function syncDeviceScreen() {
+    if (!phoneModel) return;
+    const poseName = getActivePoseName(currentDeviceModel);
+    const sizeFactor = getPoseSizeFactor(currentDeviceModel);
+    const unfoldPercent = getUnfoldPercent();
+    const poseChanged = phoneModel.userData.appliedPose !== poseName
+        || phoneModel.userData.appliedUnfold !== unfoldPercent;
+    const scaleChanged = phoneModel.userData.appliedSizeFactor !== sizeFactor;
+
+    if (poseChanged || scaleChanged) {
+        baseModelScale = getModelBaseScale(phoneModel.userData.modelSize, currentDeviceModel);
+        applyPoseState(phoneModel, customScreenPlane, currentDeviceModel, null);
+        phoneModel.userData.appliedPose = poseName;
+        phoneModel.userData.appliedUnfold = unfoldPercent;
+    }
+    if (customScreenPlane) {
+        applyScreenSpec(customScreenPlane, getScreenSpec(currentDeviceModel));
+    }
+}
+
 // Update the screen texture with current screenshot
 function updateScreenTexture() {
     if (!phoneModel) return;
+    syncDeviceScreen();
     if (typeof state === 'undefined' || !state.screenshots.length) return;
 
     const screenshot = state.screenshots[state.selectedIndex];
@@ -752,10 +1068,8 @@ function updateScreenTexture() {
         screenTexture.dispose();
     }
 
-    // Create rounded corner version of the image using device-specific corner radius
-    const config = deviceConfigs[currentDeviceModel] || deviceConfigs.iphone;
-    const cornerRadius = Math.round(screenshotImage.width * config.cornerRadiusFactor);
-    const roundedImage = createRoundedScreenImage(screenshotImage, cornerRadius);
+    // Create the screen texture image using device/pose-specific corner radius
+    const roundedImage = createScreenImage(screenshotImage, getScreenSpec(currentDeviceModel));
 
     screenTexture = new THREE.Texture(roundedImage);
     screenTexture.needsUpdate = true;
@@ -773,7 +1087,6 @@ function updateScreenTexture() {
     if (customScreenPlane) {
         customScreenPlane.material.dispose();
         customScreenPlane.material = screenMaterial;
-        console.log('Applied rounded texture to custom screen plane');
     }
 
     // Trigger render update
@@ -948,6 +1261,13 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
         threeScene.add(pivotToUse);
     }
 
+    // This screenshot may use a different pose (folded/unfolded) than the model
+    // is currently in, so pose it for this render and revert afterwards.
+    const cachedEntry = useCurrentModel ? null : phoneModelCache[screenshotDeviceType];
+    const modelToPose = useCurrentModel ? phoneModel : cachedEntry?.model;
+    const poseSnapshot = capturePoseState(modelToPose, screenPlaneToUse);
+    applyPoseState(modelToPose, screenPlaneToUse, screenshotDeviceType, ss);
+
     // Store original values
     const originalBackground = threeScene.background;
     const originalPosition = pivotToUse.position.clone();
@@ -966,8 +1286,7 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
         : screenshot?.image;
     const oldMaterial = screenPlaneToUse ? screenPlaneToUse.material : null;
     if (screenshotImage && screenPlaneToUse) {
-        const cornerRadius = Math.round(screenshotImage.width * config.cornerRadiusFactor);
-        const roundedImage = createRoundedScreenImage(screenshotImage, cornerRadius);
+        const roundedImage = createScreenImage(screenshotImage, getScreenSpec(screenshotDeviceType, ss));
         const newTexture = new THREE.Texture(roundedImage);
         newTexture.needsUpdate = true;
         newTexture.encoding = THREE.sRGBEncoding;
@@ -1040,6 +1359,9 @@ function renderThreeJSForScreenshot(targetCanvas, width, height, screenshotIndex
     pivotToUse.position.copy(originalPosition);
     pivotToUse.scale.copy(originalScale);
     pivotToUse.rotation.copy(originalRotation);
+
+    // Put the model back in the pose the editor is showing
+    restorePoseState(modelToPose, screenPlaneToUse, poseSnapshot);
 
     // Restore original material
     if (oldMaterial && screenPlaneToUse) {

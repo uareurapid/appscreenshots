@@ -37,6 +37,8 @@ const state = {
             cornerRadius: 24,
             use3D: false,
             device3D: 'iphone',
+            duoState: 'unfolded',
+            unfoldPercent: 100,
             rotation3D: { x: 0, y: 0, z: 0 },
             shadow: {
                 enabled: true,
@@ -98,6 +100,9 @@ const state = {
 };
 
 const baseTextDefaults = JSON.parse(JSON.stringify(state.defaults.text));
+// Snapshot of the screenshot defaults as declared above, so resets reuse this
+// single definition instead of a second, easily-out-of-sync copy.
+const baseScreenshotDefaults = JSON.parse(JSON.stringify(state.defaults.screenshot));
 
 // Runtime-only state (not persisted)
 let selectedElementId = null;
@@ -1385,6 +1390,13 @@ const deviceDimensions = {
     'web-feature': { width: 1024, height: 500 }
 };
 
+// The foldable ignores the output-size selection: its two screens have their own
+// store sizes, landscape for the inner display and portrait for the cover screen.
+const duoDimensions = {
+    unfolded: { width: 2853, height: 2007 },
+    folded: { width: 1398, height: 2034 }
+};
+
 // DOM elements
 const canvas = document.getElementById('preview-canvas');
 const ctx = canvas.getContext('2d');
@@ -2198,28 +2210,7 @@ function resetStateToDefaults() {
             noise: false,
             noiseIntensity: 10
         },
-        screenshot: {
-            scale: 70,
-            y: 60,
-            x: 50,
-            rotation: 0,
-            perspective: 0,
-            cornerRadius: 24,
-            shadow: {
-                enabled: true,
-                color: '#000000',
-                blur: 40,
-                opacity: 30,
-                x: 0,
-                y: 20
-            },
-            frame: {
-                enabled: false,
-                color: '#1d1d1f',
-                width: 12,
-                opacity: 100
-            }
-        },
+        screenshot: JSON.parse(JSON.stringify(baseScreenshotDefaults)),
         text: {
             headlineEnabled: true,
             headlines: { en: '' },
@@ -2769,6 +2760,44 @@ function duplicateScreenshot(index) {
     updateCanvas();
 }
 
+// Creates the foldable's two App Store screenshots: the outer (cover) screen
+// folded at full size, and the inner screen unfolded at three-quarter size.
+function addDuoPair() {
+    if (!state.screenshots.length) return;
+
+    const sourceIndex = state.selectedIndex;
+    const baseName = (state.screenshots[sourceIndex].name || 'Screen').replace(/\.[^.]+$/, '');
+
+    duplicateScreenshot(sourceIndex);
+    const foldedIndex = sourceIndex + 1;
+    duplicateScreenshot(foldedIndex);
+    const unfoldedIndex = sourceIndex + 2;
+
+    [
+        { index: foldedIndex, pose: 'folded', scale: 100, name: baseName + ' - Outer Screen' },
+        { index: unfoldedIndex, pose: 'unfolded', scale: 75, name: baseName + ' - Inner Screen' }
+    ].forEach(({ index, pose, scale, name }) => {
+        const entry = state.screenshots[index];
+        if (!entry) return;
+        entry.name = name;
+        entry.screenshot.use3D = true;
+        entry.screenshot.device3D = 'iphone-duo';
+        entry.screenshot.duoState = pose;
+        entry.screenshot.scale = scale;
+    });
+
+    // The inner screen is the point of a foldable, so show it slightly open
+    // rather than perfectly flat.
+    const inner = state.screenshots[unfoldedIndex];
+    if (inner) inner.screenshot.unfoldPercent = 75;
+
+    state.selectedIndex = foldedIndex;
+
+    updateScreenshotList();
+    syncUIWithState();
+    updateCanvas();
+}
+
 // Populate frame color swatches for the given device and highlight the active one
 function updateFrameColorSwatches(deviceType, activeColorId) {
     const container = document.getElementById('frame-color-swatches');
@@ -2807,6 +2836,19 @@ function updateFrameColorSwatches(deviceType, activeColorId) {
     });
 }
 
+// The foldable's pose/pair controls only apply while the Duo model is active in 3D
+function updateDuoControls(use3D, device3D, duoState) {
+    const isDuo = !!use3D && device3D === 'iphone-duo';
+    document.getElementById('duo-pose-group').style.display = isDuo ? 'block' : 'none';
+    document.getElementById('duo-pair-group').style.display = isDuo ? 'block' : 'none';
+    const unfoldOnly = isDuo && (duoState || 'unfolded') === 'unfolded';
+    document.getElementById('duo-unfold-group').style.display = unfoldOnly ? 'block' : 'none';
+    const pose = duoState || 'unfolded';
+    document.querySelectorAll('#duo-pose-selector button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.pose === pose);
+    });
+}
+
 // Sync UI controls with current state
 function syncUIWithState() {
     // Update language button
@@ -2821,11 +2863,7 @@ function syncUIWithState() {
     const selectedOption = document.querySelector(`.output-size-menu .device-option[data-device="${state.outputDevice}"]`);
     if (selectedOption) {
         document.getElementById('output-size-name').textContent = selectedOption.querySelector('.device-option-name').textContent;
-        if (state.outputDevice === 'custom') {
-            document.getElementById('output-size-dims').textContent = `${state.customWidth} × ${state.customHeight}`;
-        } else {
-            document.getElementById('output-size-dims').textContent = selectedOption.querySelector('.device-option-size').textContent;
-        }
+        updateOutputSizeLabel();
     }
 
     // Show/hide custom inputs
@@ -2991,6 +3029,10 @@ function syncUIWithState() {
     document.querySelectorAll('#device-3d-selector button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.model === device3D);
     });
+    updateDuoControls(use3D, device3D, ss.duoState);
+    const unfoldPercent = Number.isFinite(Number(ss.unfoldPercent)) ? Number(ss.unfoldPercent) : 100;
+    document.getElementById('duo-unfold').value = unfoldPercent;
+    document.getElementById('duo-unfold-value').textContent = unfoldPercent + '%';
     updateFrameColorSwatches(device3D, ss.frameColor);
     document.getElementById('rotation-3d-options').style.display = use3D ? 'block' : 'none';
     document.getElementById('rotation-3d-x').value = rotation3D.x;
@@ -5001,7 +5043,7 @@ function setupEventListeners() {
 
             // Update trigger text
             document.getElementById('output-size-name').textContent = opt.querySelector('.device-option-name').textContent;
-            document.getElementById('output-size-dims').textContent = opt.querySelector('.device-option-size').textContent;
+            updateOutputSizeLabel();
 
             // Show/hide custom inputs
             const customInputs = document.getElementById('custom-size-inputs');
@@ -5018,12 +5060,12 @@ function setupEventListeners() {
     // Custom size inputs
     document.getElementById('custom-width').addEventListener('input', (e) => {
         state.customWidth = parseInt(e.target.value) || 1290;
-        document.getElementById('output-size-dims').textContent = `${state.customWidth} × ${state.customHeight}`;
+        updateOutputSizeLabel();
         updateCanvas();
     });
     document.getElementById('custom-height').addEventListener('input', (e) => {
         state.customHeight = parseInt(e.target.value) || 2796;
-        document.getElementById('output-size-dims').textContent = `${state.customWidth} × ${state.customHeight}`;
+        updateOutputSizeLabel();
         updateCanvas();
     });
 
@@ -5553,6 +5595,7 @@ function setupEventListeners() {
             const use3D = btn.dataset.type === '3d';
             setScreenshotSetting('use3D', use3D);
             document.getElementById('rotation-3d-options').style.display = use3D ? 'block' : 'none';
+            updateDuoControls(use3D, getScreenshotSettings().device3D, getScreenshotSettings().duoState);
 
             // Hide 2D-only settings in 3D mode, show 3D tip
             document.getElementById('2d-only-settings').style.display = use3D ? 'none' : 'block';
@@ -5580,6 +5623,7 @@ function setupEventListeners() {
 
             const device3D = btn.dataset.model;
             setScreenshotSetting('device3D', device3D);
+            updateDuoControls(true, device3D, getScreenshotSettings().duoState);
 
             // Reset frame color to first preset for new device
             const presets = typeof frameColorPresets !== 'undefined' ? frameColorPresets[device3D] : null;
@@ -5598,6 +5642,30 @@ function setupEventListeners() {
 
             updateCanvas();
         });
+    });
+
+    // Foldable pose selector (iPhone Duo only)
+    document.querySelectorAll('#duo-pose-selector button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#duo-pose-selector button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            setScreenshotSetting('duoState', btn.dataset.pose);
+            updateDuoControls(true, 'iphone-duo', btn.dataset.pose);
+            updateCanvas();
+        });
+    });
+
+    // How far the foldable's inner screen is unfolded
+    document.getElementById('duo-unfold').addEventListener('input', (e) => {
+        const value = parseInt(e.target.value, 10);
+        setScreenshotSetting('unfoldPercent', value);
+        document.getElementById('duo-unfold-value').textContent = value + '%';
+        updateCanvas();
+    });
+
+    // Create the foldable's outer + inner screens as a pair of screenshots
+    document.getElementById('duo-pair-btn').addEventListener('click', () => {
+        addDuoPair();
     });
 
     // 3D rotation controls
@@ -7791,22 +7859,59 @@ function updateGradientStopsUI() {
     });
 }
 
+// The foldable's canvas follows its pose: the inner display is landscape and the
+// folded cover screen is portrait.
+function getDuoPose(index) {
+    const settings = state.screenshots[index === undefined ? state.selectedIndex : index]?.screenshot;
+    if (!settings || !settings.use3D || settings.device3D !== 'iphone-duo') return null;
+    return settings.duoState === 'folded' ? 'folded' : 'unfolded';
+}
+
 function getCanvasDimensions() {
+    const pose = getDuoPose();
+    if (pose) return duoDimensions[pose];
     if (state.outputDevice === 'custom') {
         return { width: state.customWidth, height: state.customHeight };
     }
     return deviceDimensions[state.outputDevice];
 }
 
+// The label shows the size that will actually be exported, which for the
+// foldable is its own store size rather than the selected output size.
+function updateOutputSizeLabel(dims) {
+    const size = dims || getCanvasDimensions();
+    const el = document.getElementById('output-size-dims');
+    if (size && el) {
+        const text = `${size.width} × ${size.height}`;
+        if (el.textContent !== text) el.textContent = text;
+    }
+}
+
+// Preview box size, measured once per layout so slider drags don't force reflow.
+let cachedCanvasAreaWidth = 0;
+window.addEventListener('resize', () => { cachedCanvasAreaWidth = 0; });
+
+function getPreviewBox(dims) {
+    const landscape = dims.width > dims.height;
+    if (!landscape) return { width: 400, height: 700 };
+    if (!cachedCanvasAreaWidth) {
+        const area = document.getElementById('canvas-area');
+        cachedCanvasAreaWidth = area ? Math.max(320, area.clientWidth - 80) : 400;
+    }
+    return { width: Math.min(560, cachedCanvasAreaWidth), height: 400 };
+}
+
 function updateCanvas() {
     saveState(); // Persist state on every update
     const dims = getCanvasDimensions();
+    updateOutputSizeLabel(dims);
     canvas.width = dims.width;
     canvas.height = dims.height;
 
     // Scale for preview
-    const maxPreviewWidth = 400;
-    const maxPreviewHeight = 700;
+    const previewBox = getPreviewBox(dims);
+    const maxPreviewWidth = previewBox.width;
+    const maxPreviewHeight = previewBox.height;
     const scale = Math.min(maxPreviewWidth / dims.width, maxPreviewHeight / dims.height);
     canvas.style.width = (dims.width * scale) + 'px';
     canvas.style.height = (dims.height * scale) + 'px';
