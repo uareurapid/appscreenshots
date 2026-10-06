@@ -5212,6 +5212,14 @@ function setupEventListeners() {
         updateCanvas();
     });
 
+    document.getElementById('bg-overlay-hex').addEventListener('input', (e) => {
+        if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
+            setBackgroundForAll('overlayColor', e.target.value);
+            document.getElementById('bg-overlay-color').value = e.target.value;
+            updateCanvas();
+        }
+    });
+
     document.getElementById('bg-overlay-opacity').addEventListener('input', (e) => {
         setBackgroundForAll('overlayOpacity', parseInt(e.target.value));
         document.getElementById('bg-overlay-opacity-value').textContent = formatValue(e.target.value) + '%';
