@@ -57,7 +57,7 @@ const deviceConfigs = {
                 foldBone: 'Bone_01',
                 foldHingeZ: 0.0024,
                 aspectRatio: 0.1586 / 0.1109,
-                screenHeightFactor: 0.1109 / 4.3,
+                screenHeightFactor: 0.1109 / 4.3, //before 0.1109 / 4.3 , after 0.1185 / 4.3
                 screenOffset: { x: 0.000, y: 0.0589, z: 0.0055 },
                 fitScreen: true,
                 // Landscape canvas: the wide, open device is height-constrained.
@@ -66,7 +66,7 @@ const deviceConfigs = {
             folded: {
                 bones: { Bone_Hinge: 0, Bone_01: 180 },
                 aspectRatio: 0.0779 / 0.1104,
-                screenHeightFactor: 0.1104 / 4.3,
+                screenHeightFactor: 0.1180 / 4.3, //before 0.1104 / 4.3, after 0.1180 / 4.3
                 screenOffset: { x: 0.0409, y: 0.0591, z: 0.0105 },
                 fitScreen: true,
                 // Portrait canvas (1398x2034): the folded device is the width
@@ -182,7 +182,7 @@ function applyDevicePose(model, deviceType, settings) {
 // halves as separate quads so the left one can pivot at the hinge and the
 // screenshot bends exactly like the display underneath. `hingeZ` is how far the
 // real hinge axis sits behind the overlay plane.
-function createScreenGeometry(width, height, foldRadians, hingeZ) {
+function createScreenGeometry(width, height, foldRadians) {
     if (!foldRadians) return new THREE.PlaneGeometry(width, height);
 
     const halfWidth = width / 2;
@@ -197,8 +197,11 @@ function createScreenGeometry(width, height, foldRadians, hingeZ) {
                 let px = x;
                 let pz = 0;
                 if (hinged) {
-                    px = x * cos + hingeZ * sin;
-                    pz = -x * sin + hingeZ * cos - hingeZ;
+                    // Pivot the hinged half around the surface crease (x=0, z=0)
+                    // so its inner edge stays exactly on the flat half's edge —
+                    // no seam gap at the middle.
+                    px = x * cos;
+                    pz = -x * sin;
                 }
                 positions.push(px, y, pz);
                 uvs.push((x + halfWidth) / width, (y + halfHeight) / height);
@@ -217,9 +220,18 @@ function createScreenGeometry(width, height, foldRadians, hingeZ) {
 // Resize and reposition an existing screen plane to match a screen spec.
 function applyScreenSpec(plane, spec) {
     const planeHeight = 4.3 * spec.screenHeightFactor;
-    const planeWidth = planeHeight * spec.aspectRatio;
+    let planeWidth = planeHeight * spec.aspectRatio;
     const foldRadians = spec.foldRadians || 0;
     const hingeZ = spec.hingeZ || 0;
+
+    // A folded display projects narrower on screen because the hinged half is
+    // tilted into the screen: its horizontal extent shrinks by cos(fold). Widen
+    // the plane by 2/(1+cos) so the folded screenshot still fills the full
+    // display width — and the image stretches when folded, enlarges when open.
+    if (foldRadians > 0.001) {
+        planeWidth = planeWidth * 2 / (1 + Math.cos(foldRadians));
+    }
+
     const applied = plane.userData.appliedScreenSpec;
 
     if (!applied
@@ -228,7 +240,7 @@ function applyScreenSpec(plane, spec) {
         || Math.abs(applied.foldRadians - foldRadians) > 1e-6
         || Math.abs(applied.hingeZ - hingeZ) > 1e-6) {
         plane.geometry.dispose();
-        plane.geometry = createScreenGeometry(planeWidth, planeHeight, foldRadians, hingeZ);
+        plane.geometry = createScreenGeometry(planeWidth, planeHeight, foldRadians);
         plane.userData.appliedScreenSpec = { width: planeWidth, height: planeHeight, foldRadians, hingeZ };
     }
     plane.position.set(spec.screenOffset.x, spec.screenOffset.y, spec.screenOffset.z);
