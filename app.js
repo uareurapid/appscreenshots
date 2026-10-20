@@ -2760,38 +2760,68 @@ function duplicateScreenshot(index) {
     updateCanvas();
 }
 
+// Strips pose suffixes, file extensions and duplicate markers so a pair's two
+// entries always derive from the same base name.
+function duoPairBaseName(name) {
+    return (name || 'Screen')
+        .replace(/\.[^.]+$/, '')
+        .replace(/ - (Outer|Inner) Screen/g, '')
+        .replace(/( \(Copy\))+$/, '')
+        .trim() || 'Screen';
+}
+
+// Index of the other screenshot of a Duo pair, or -1 when this one is not
+// already part of a pair.
+function findDuoPairSibling(index) {
+    const entry = state.screenshots[index];
+    if (!entry || !/ - (Outer|Inner) Screen/.test(entry.name || '')) return -1;
+    const siblingName = duoPairBaseName(entry.name)
+        + (/ - Inner Screen/.test(entry.name) ? ' - Outer Screen' : ' - Inner Screen');
+    return state.screenshots.findIndex((s, i) => i !== index && s.name === siblingName);
+}
+
+function configureDuoEntry(entry, baseName, pose, scale) {
+    if (!entry) return;
+    entry.name = baseName + (pose === 'folded' ? ' - Outer Screen' : ' - Inner Screen');
+    entry.screenshot.use3D = true;
+    entry.screenshot.device3D = 'iphone-duo';
+    entry.screenshot.duoState = pose;
+    entry.screenshot.scale = scale;
+    // The inner screen is the point of a foldable, so show it slightly open
+    // rather than perfectly flat.
+    if (pose === 'unfolded') entry.screenshot.unfoldPercent = 75;
+}
+
 // Creates the foldable's two App Store screenshots: the outer (cover) screen
 // folded at full size, and the inner screen unfolded at three-quarter size.
 function addDuoPair() {
     if (!state.screenshots.length) return;
 
     const sourceIndex = state.selectedIndex;
-    const baseName = (state.screenshots[sourceIndex].name || 'Screen').replace(/\.[^.]+$/, '');
+    const baseName = duoPairBaseName(state.screenshots[sourceIndex].name);
 
+    // Already a pair: re-apply the two poses instead of adding a third image.
+    const siblingIndex = findDuoPairSibling(sourceIndex);
+    if (siblingIndex !== -1) {
+        const outerIndex = Math.min(sourceIndex, siblingIndex);
+        const innerIndex = Math.max(sourceIndex, siblingIndex);
+        configureDuoEntry(state.screenshots[outerIndex], baseName, 'folded', 100);
+        configureDuoEntry(state.screenshots[innerIndex], baseName, 'unfolded', 75);
+        state.selectedIndex = outerIndex;
+        updateScreenshotList();
+        syncUIWithState();
+        updateCanvas();
+        return;
+    }
+
+    // The screenshot being edited becomes the outer one; a single copy is added
+    // for the inner screen, so a pair is exactly the two App Store images and
+    // each entry keeps its own image.
+    configureDuoEntry(state.screenshots[sourceIndex], baseName, 'folded', 100);
     duplicateScreenshot(sourceIndex);
-    const foldedIndex = sourceIndex + 1;
-    duplicateScreenshot(foldedIndex);
-    const unfoldedIndex = sourceIndex + 2;
+    configureDuoEntry(state.screenshots[sourceIndex + 1], baseName, 'unfolded', 75);
 
-    [
-        { index: foldedIndex, pose: 'folded', scale: 100, name: baseName + ' - Outer Screen' },
-        { index: unfoldedIndex, pose: 'unfolded', scale: 75, name: baseName + ' - Inner Screen' }
-    ].forEach(({ index, pose, scale, name }) => {
-        const entry = state.screenshots[index];
-        if (!entry) return;
-        entry.name = name;
-        entry.screenshot.use3D = true;
-        entry.screenshot.device3D = 'iphone-duo';
-        entry.screenshot.duoState = pose;
-        entry.screenshot.scale = scale;
-    });
-
-    // The inner screen is the point of a foldable, so show it slightly open
-    // rather than perfectly flat.
-    const inner = state.screenshots[unfoldedIndex];
-    if (inner) inner.screenshot.unfoldPercent = 75;
-
-    state.selectedIndex = foldedIndex;
+    state.selectedIndex = sourceIndex;
 
     updateScreenshotList();
     syncUIWithState();

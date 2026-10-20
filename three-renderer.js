@@ -62,11 +62,74 @@ const deviceConfigs = {
                 fitScreen: true,
                 // Landscape canvas: the wide, open device is height-constrained.
                 sizeFactor: 1.26
+                /**
+                 * One small cleanup though: 
+                 * you changed both aspectRatio and screenHeightFactor. 
+                 * You only need the second one. 
+                 * Keeping aspectRatio at the display's true ratio 
+                 * is slightly more correct:
+                 * Example to 5% unfold shorter:
+                 * unfolded: {
+                    bones: { Bone_Hinge: 0, Bone_01: 0 },
+                    // Partial unfold: the hinge angle is 180° * (1 - unfoldPercent/100),
+                    // where 100% is flat open and 0% is fully closed. `foldHingeZ` is the
+                    // depth of the inner display surface, i.e. the real hinge axis.
+                    foldBone: 'Bone_01',
+                    foldHingeZ: 0.0024,
+                    aspectRatio: 0.1586 / 0.1109,          // unchanged — true display ratio
+                    screenHeightFactor: 0.1054 / 4.3,      // 0.1109 × 0.95
+                    screenOffset: { x: 0.000, y: 0.0589, z: 0.0055 },
+                    fitScreen: true,
+                    // Landscape canvas: the wide, open device is height-constrained.
+                    sizeFactor: 1.26
+
+                    planeHeight = 4.3 × (0.1054 / 4.3) = 0.1054, 
+                    and planeWidth = 0.1054 × (0.1586 / 0.1109) = 0.15073. 
+                    Both axes shrink 5%, no distortion, 
+                    exact display proportions.
+
+                    If you also want the folded pose 5% smaller, 
+                    change only its screenHeightFactor to 0.1121 / 4.3 (0.1180 × 0.95),
+                    leaving aspectRatio: 0.0779 / 0.1104 as is. 
+                    That pose is currently 0.0833 × 0.1180.
+
+                    ------------
+                    So height comes exclusively from screenHeightFactor, and width is just height × aspectRatio. Lower the factor → the plane gets shorter and narrower in proportion, i.e. the same picture, smaller, inside the same frame. No distortion, because aspectRatio is unchanged.
+
+What the numbers actually mean
+The values are written as N / 4.3 so that 4.3 * (N / 4.3) === N — meaning the numerator is the plane's height in world units. Current effective plane sizes:
+
+Pose   screenHeightFactor   plane height  plane width
+
+unfolded      0.1109 / 4.3    0.1109        0.1586
+folded        0.1180 / 4.3    0.1180        0.0833
+
+So for the folded pose a 5% smaller screenshot is just 0.1121 / 4.3; 10% smaller is 0.1062 / 4.3. Keep the / 4.3 divisor so the "numerator = world height" convention stays readable.
+
+Verified
+I halved-step-tested this on the live app by scaling only screenHeightFactor for unfolded and counting the rendered screenshot pixels on the canvas:
+
+factor plane H × W   rendered screen (px)
+1.00   0.1109 × 0.1586      1,294,775
+0.95   0.1054 × 0.1507      1,166,203
+0.90   0.0998 × 0.1427      1,047,365
+0.80   0.0887 × 0.1269      826,163
+
+Exact proportional shrink, both axes together.
+
+Things to know before you tweak
+Don't touch sizeFactor — that scales the whole model to frame it in the canvas, not the screenshot inside the frame. Same for screenOffset, which only moves it.
+aspectRatio changes the screen's shape, not just its size. Since both Duo poses set fitScreen: true, changing it also re-does the letterboxing of your screenshot (createScreenImage()). Only use it if you want a wider/narrower display.
+cornerRadiusFactor needs no change — the radius is computed from the rendered image width, so it scales down with the screen automatically.
+Partial-unfold compensation: when unfoldPercent < 100, applyScreenSpec() widens the plane by 2 / (1 + cos θ) to offset the foreshortened hinged half. That's automatic, so tune the size at 100% unfold and it stays consistent at 75%.
+It shrinks around its centre, which sits at screenOffset. If the display's centre isn't exactly at that offset you'll see the gap go asymmetric — nudge screenOffset.x / .y to re-centre.
+}
+                 */
             },
             folded: {
                 bones: { Bone_Hinge: 0, Bone_01: 180 },
                 aspectRatio: 0.0779 / 0.1104,
-                screenHeightFactor: 0.1180 / 4.3, //before 0.1104 / 4.3, after 0.1180 / 4.3
+                screenHeightFactor: 0.1097 / 4.3, //before 0.1104 / 4.3, after 0.1180 / 4.3 > 5% smaller = 0.1121 / 4.3 (0.1180 × 0.95)
                 screenOffset: { x: 0.0409, y: 0.0591, z: 0.0105 },
                 fitScreen: true,
                 // Portrait canvas (1398x2034): the folded device is the width
