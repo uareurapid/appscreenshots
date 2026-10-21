@@ -128,10 +128,25 @@ It shrinks around its centre, which sits at screenOffset. If the display's centr
             },
             folded: {
                 bones: { Bone_Hinge: 0, Bone_01: 180 },
-                aspectRatio: 0.0779 / 0.1104,
-                screenHeightFactor: 0.1097 / 4.3, //before 0.1104 / 4.3, after 0.1180 / 4.3 > 5% smaller = 0.1121 / 4.3 (0.1180 × 0.95)
-                screenOffset: { x: 0.0409, y: 0.0591, z: 0.0105 },
+                // The closed phone shows its cover screen edge to edge. The
+                // overlay can stop at any of three faces of the front; all three
+                // presets below were tuned against the live render and land on
+                // their face within ~1px (size / centre in model units, face
+                // depth 0.0078 vs overlay 0.0105 already compensated):
+                //   display 0.076704 x 0.110902 @ 0.040909, 0.058923 — stops at the display, bezel visible (current)
+                //   glass   0.079536 x 0.113657 @ 0.040928, 0.058900 — covers the bezel, frame visible
+                //   frame   0.081155 x 0.115498 @ 0.041023, 0.058900 — fills the whole front face
+                aspectRatio: 0.076704 / 0.110902,
+                screenHeightFactor: 0.110902 / 4.3,
+                screenOffset: { x: 0.040909, y: 0.058923, z: 0.0105 },
+                // The hinge side of the frame is almost square while the far side
+                // is strongly rounded (measured on the display: ~17px left,
+                // ~150px right of 1180px), so the screenshot rounds per corner.
+                cornerRadii: { topLeft: 0.014, topRight: 0.127, bottomRight: 0.127, bottomLeft: 0.014 },
                 fitScreen: true,
+                // Crop rather than letterbox: a portrait screenshot must fill
+                // this wide cover screen without black bars.
+                cropToFill: true,
                 // Portrait canvas (1398x2034): the folded device is the width
                 // constraint, so it is scaled to fill that viewport.
                 sizeFactor: 1.24
@@ -197,7 +212,11 @@ function getScreenSpec(deviceType, settings) {
         screenHeightFactor: pose ? pose.screenHeightFactor : config.screenHeightFactor,
         screenOffset: pose ? pose.screenOffset : config.screenOffset,
         fitScreen: pose ? !!pose.fitScreen : !!config.fitScreen,
-        cornerRadiusFactor: config.cornerRadiusFactor || 0.06,
+        cropToFill: pose ? !!pose.cropToFill : !!config.cropToFill,
+        // A pose may override the frame's corner radius (the closed foldable
+        // shows only its outer face, whose corners are much tighter).
+        cornerRadiusFactor: (pose && pose.cornerRadiusFactor) || config.cornerRadiusFactor || 0.06,
+        cornerRadii: (pose && pose.cornerRadii) || config.cornerRadii || null,
         // Poses that hinge open (the foldable's inner display) bend the overlay
         // at the crease so the screenshot follows the display. `foldHingeZ` is
         // the display's surface depth, i.e. where the hinge axis really sits.
@@ -1051,28 +1070,38 @@ function createScreenOverlay() {
     console.log('Plane size:', planeWidth.toFixed(4), 'x', planeHeight.toFixed(4));
 }
 
-// Create a rounded corner version of the screenshot
+// Create a rounded corner version of the screenshot. `cornerRadius` is either
+// one radius for every corner or an object with per-corner radii, which the
+// closed foldable needs: its hinge side is nearly square while the far side is
+// heavily rounded.
 function createRoundedScreenImage(image, cornerRadius) {
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
     canvas.height = image.height;
     const ctx = canvas.getContext('2d');
 
-    // Draw rounded rectangle path
     const w = canvas.width;
     const h = canvas.height;
-    const r = cornerRadius;
+    const radii = typeof cornerRadius === 'number'
+        ? { topLeft: cornerRadius, topRight: cornerRadius, bottomRight: cornerRadius, bottomLeft: cornerRadius }
+        : cornerRadius;
+    const tl = Math.min(radii.topLeft || 0, w / 2, h / 2);
+    const tr = Math.min(radii.topRight || 0, w / 2, h / 2);
+    const br = Math.min(radii.bottomRight || 0, w / 2, h / 2);
+    const bl = Math.min(radii.bottomLeft || 0, w / 2, h / 2);
 
+    // Circular arcs (arcTo), so a radius is a real radius — a quadratic curve
+    // would come out noticeably shallower than the frame's corners.
     ctx.beginPath();
-    ctx.moveTo(r, 0);
-    ctx.lineTo(w - r, 0);
-    ctx.quadraticCurveTo(w, 0, w, r);
-    ctx.lineTo(w, h - r);
-    ctx.quadraticCurveTo(w, h, w - r, h);
-    ctx.lineTo(r, h);
-    ctx.quadraticCurveTo(0, h, 0, h - r);
-    ctx.lineTo(0, r);
-    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.moveTo(tl, 0);
+    ctx.lineTo(w - tr, 0);
+    ctx.arcTo(w, 0, w, tr, tr);
+    ctx.lineTo(w, h - br);
+    ctx.arcTo(w, h, w - br, h, br);
+    ctx.lineTo(bl, h);
+    ctx.arcTo(0, h, 0, h - bl, bl);
+    ctx.lineTo(0, tl);
+    ctx.arcTo(0, 0, tl, 0, tl);
     ctx.closePath();
 
     // Clip to rounded rectangle and draw image
@@ -1085,7 +1114,9 @@ function createRoundedScreenImage(image, cornerRadius) {
 // Builds the screen image texture for a device. A screenshot whose aspect ratio
 // differs from the display is stretched to fill it by default; devices that set
 // `fitScreen` (e.g. the foldable, whose inner display is landscape) letterbox it
-// instead so the screenshot keeps its proportions.
+// instead so the screenshot keeps its proportions. A pose that also sets
+// `cropToFill` keeps the proportions but scales up to cover the display and
+// crops the overflow, so no black bars show inside the frame.
 function createScreenImage(image, spec) {
     let source = image;
     if (spec.fitScreen) {
@@ -1095,13 +1126,31 @@ function createScreenImage(image, spec) {
         const ctx = fitted.getContext('2d');
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, fitted.width, fitted.height);
-        const scale = Math.min(fitted.width / image.width, fitted.height / image.height);
+        const scale = spec.cropToFill
+            ? Math.max(fitted.width / image.width, fitted.height / image.height)
+            : Math.min(fitted.width / image.width, fitted.height / image.height);
         const w = image.width * scale;
         const h = image.height * scale;
         ctx.drawImage(image, (fitted.width - w) / 2, (fitted.height - h) / 2, w, h);
         source = fitted;
     }
-    return createRoundedScreenImage(source, Math.round(source.width * spec.cornerRadiusFactor));
+    return createRoundedScreenImage(source, getCornerRadii(spec, source.width));
+}
+
+// Corner radii as a fraction of the screen width. Most devices use one value;
+// the closed foldable shows a different radius per corner.
+function getCornerRadii(spec, width) {
+    const factors = spec.cornerRadii;
+    if (!factors) {
+        const r = Math.round(width * spec.cornerRadiusFactor);
+        return r;
+    }
+    return {
+        topLeft: Math.round(width * factors.topLeft),
+        topRight: Math.round(width * factors.topRight),
+        bottomRight: Math.round(width * factors.bottomRight),
+        bottomLeft: Math.round(width * factors.bottomLeft)
+    };
 }
 
 // Keep the loaded model's pose and screen plane matched to the current screenshot.
