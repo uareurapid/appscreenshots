@@ -28,7 +28,7 @@ A free, open-source tool for creating beautiful App Store screenshots with custo
 ### Device Mockups
 - **2D Mode**: Position, scale, rotate, and adjust corner radius of screenshots
 - **3D Mode**: Interactive iPhone 15 Pro Max 3D mockup with drag-to-rotate
-- **iPhone Duo (foldable)**: Uses its own App Store sizes instead of the selected output size — the unfolded inner screen exports in landscape at 2853 × 2007 and the folded outer screen in portrait at 1398 × 2034. "Add Duo Pair" turns the current screenshot into the outer screen and adds the inner one, so the pair is exactly two images and each keeps its own artwork. The inner screen can be shown partly folded (an "Unfold Amount" slider) — the screenshot bends with the hinge instead of floating flat over it
+- **iPhone Duo (foldable)**: Uses its own App Store sizes instead of the selected output size — the unfolded inner screen exports in landscape at 2853 × 2007 and the folded outer screen in portrait at 1398 × 2034. Each "Add Duo Pair" click adds two screenshots — the outer screen (folded, portrait) and the inner screen (unfolded, landscape) — so you can build several pairs in a row. Both start from the selected screenshot, and you replace either one's image from its thumbnail menu to give the inner and outer screens different artwork. The inner screen can be shown partly folded (an "Unfold Amount" slider) — the screenshot bends with the hinge instead of floating flat over it
 - **Position Presets**: Centered, bleed, tilt left/right, perspective, and more
 - **Shadow Effects**: Customizable drop shadows with color, blur, opacity, and offset
 - **Border Effects**: Add borders around screenshots with adjustable width and opacity
@@ -151,7 +151,7 @@ docker compose -f docker-compose.build.yml up -d
 2. **Choose Output Size**: Select the target device size from the sidebar
 3. **Customize Background**: Choose gradient, solid color, or image background
 4. **Position Screenshot**: Use presets or manually adjust scale, position, and rotation
-5. **Switch to 3D** (optional): Enable 3D mode for interactive iPhone mockup — pick the iPhone Duo model, choose its folded or unfolded pose, and use "Add Duo Pair" to split the current screenshot into an outer and an inner screen (replace either one's image from its thumbnail menu)
+5. **Switch to 3D** (optional): Enable 3D mode for interactive iPhone mockup — pick the iPhone Duo model, choose its folded or unfolded pose, and use "Add Duo Pair" to add an outer and an inner screen for the selected screenshot (replace either one's image from its thumbnail menu)
 6. **Add Text**: Enter your headline and optional subheadline
 7. **Export**: Download the current screenshot or export all at once as ZIP
 

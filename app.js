@@ -2679,12 +2679,16 @@ function duplicateScreenshot(index) {
         popouts: original.popouts || []
     }));
 
-    var nameParts = clone.name.split('.');
+    // A duplicate is a standalone screenshot, so drop any Duo pose label from
+    // its name ("Home - Outer Screen" becomes "Home (Copy)").
+    var cloneBaseName = (clone.name || 'Screenshot').replace(/ - (Outer|Inner) Screen/g, '');
+
+    var nameParts = cloneBaseName.split('.');
     if (nameParts.length > 1) {
         var ext = nameParts.pop();
         clone.name = nameParts.join('.') + ' (Copy).' + ext;
     } else {
-        clone.name = clone.name + ' (Copy)';
+        clone.name = cloneBaseName + ' (Copy)';
     }
 
     // Reconstruct background image if the original had one
@@ -2760,29 +2764,40 @@ function duplicateScreenshot(index) {
     updateCanvas();
 }
 
-// Strips pose suffixes, file extensions and duplicate markers so a pair's two
-// entries always derive from the same base name.
-function duoPairBaseName(name) {
-    return (name || 'Screen')
-        .replace(/\.[^.]+$/, '')
-        .replace(/ - (Outer|Inner) Screen/g, '')
-        .replace(/( \(Copy\))+$/, '')
-        .trim() || 'Screen';
+const DUO_POSE_LABELS = { folded: ' - Outer Screen', unfolded: ' - Inner Screen' };
+
+function stripImageExtension(name) {
+    return (name || '').replace(/\.(png|jpe?g|gif|webp|avif|heic|heif|bmp|tiff?|svg)$/i, '');
 }
 
-// Index of the other screenshot of a Duo pair, or -1 when this one is not
-// already part of a pair.
-function findDuoPairSibling(index) {
-    const entry = state.screenshots[index];
-    if (!entry || !/ - (Outer|Inner) Screen/.test(entry.name || '')) return -1;
-    const siblingName = duoPairBaseName(entry.name)
-        + (/ - Inner Screen/.test(entry.name) ? ' - Outer Screen' : ' - Inner Screen');
-    return state.screenshots.findIndex((s, i) => i !== index && s.name === siblingName);
+// Strips pose suffixes and file extensions so a pair's two entries always
+// derive from the same base name. Duplicate markers "(Copy)" are kept, so a
+// duplicated pair entry becomes its own base ("Home (Copy)") instead of
+// colliding with the pair it came from.
+function duoPairBaseName(name) {
+    return stripImageExtension(name).replace(/ - (Outer|Inner) Screen/g, '').trim() || 'Screen';
+}
+
+// Keeps the labels of different pairs from colliding: a pair added from a
+// screenshot whose base name is already used gets " 2", " 3", ... appended.
+function uniqueDuoBaseName(base) {
+    const names = new Set();
+    state.screenshots.forEach(s => { if (s) names.add(s.name); });
+    const isTaken = candidate =>
+        names.has(candidate + DUO_POSE_LABELS.folded) || names.has(candidate + DUO_POSE_LABELS.unfolded);
+    if (!isTaken(base)) return base;
+    // Continue the sequence from an already numbered base ("Home 2" -> "Home 3")
+    // so repeated clicks don't accumulate suffixes.
+    const numbered = base.match(/^(.*?) (\d+)$/);
+    if (numbered) base = numbered[1];
+    let n = 2;
+    while (isTaken(base + ' ' + n)) n++;
+    return base + ' ' + n;
 }
 
 function configureDuoEntry(entry, baseName, pose, scale) {
     if (!entry) return;
-    entry.name = baseName + (pose === 'folded' ? ' - Outer Screen' : ' - Inner Screen');
+    entry.name = baseName + (DUO_POSE_LABELS[pose] || DUO_POSE_LABELS.unfolded);
     entry.screenshot.use3D = true;
     entry.screenshot.device3D = 'iphone-duo';
     entry.screenshot.duoState = pose;
@@ -2792,36 +2807,30 @@ function configureDuoEntry(entry, baseName, pose, scale) {
     if (pose === 'unfolded') entry.screenshot.unfoldPercent = 75;
 }
 
-// Creates the foldable's two App Store screenshots: the outer (cover) screen
-// folded at full size, and the inner screen unfolded at three-quarter size.
+// Adds the foldable's two App Store screenshots next to the selected one: the
+// outer (cover) screen folded at full size and the inner screen unfolded at
+// three-quarter size. Every click adds both, whatever is selected.
 function addDuoPair() {
     if (!state.screenshots.length) return;
 
-    const sourceIndex = state.selectedIndex;
-    const baseName = duoPairBaseName(state.screenshots[sourceIndex].name);
-
-    // Already a pair: re-apply the two poses instead of adding a third image.
-    const siblingIndex = findDuoPairSibling(sourceIndex);
-    if (siblingIndex !== -1) {
-        const outerIndex = Math.min(sourceIndex, siblingIndex);
-        const innerIndex = Math.max(sourceIndex, siblingIndex);
-        configureDuoEntry(state.screenshots[outerIndex], baseName, 'folded', 100);
-        configureDuoEntry(state.screenshots[innerIndex], baseName, 'unfolded', 75);
-        state.selectedIndex = outerIndex;
-        updateScreenshotList();
-        syncUIWithState();
-        updateCanvas();
-        return;
+    // The selection can point at a hole while a project is still loading.
+    let sourceIndex = state.selectedIndex;
+    if (!state.screenshots[sourceIndex]) {
+        sourceIndex = state.screenshots.findIndex(Boolean);
+        if (sourceIndex === -1) return;
+        state.selectedIndex = sourceIndex;
     }
 
-    // The screenshot being edited becomes the outer one; a single copy is added
-    // for the inner screen, so a pair is exactly the two App Store images and
-    // each entry keeps its own image.
-    configureDuoEntry(state.screenshots[sourceIndex], baseName, 'folded', 100);
-    duplicateScreenshot(sourceIndex);
-    configureDuoEntry(state.screenshots[sourceIndex + 1], baseName, 'unfolded', 75);
+    const baseName = uniqueDuoBaseName(duoPairBaseName(state.screenshots[sourceIndex].name));
 
-    state.selectedIndex = sourceIndex;
+    duplicateScreenshot(sourceIndex);
+    duplicateScreenshot(sourceIndex + 1);
+    configureDuoEntry(state.screenshots[sourceIndex + 1], baseName, 'folded', 100);
+    configureDuoEntry(state.screenshots[sourceIndex + 2], baseName, 'unfolded', 75);
+
+    // Keep the selection on the inner screen so the next pair is added right
+    // after this one, leaving the pairs in list order.
+    state.selectedIndex = sourceIndex + 2;
 
     updateScreenshotList();
     syncUIWithState();
@@ -2877,6 +2886,7 @@ function updateDuoControls(use3D, device3D, duoState) {
     document.querySelectorAll('#duo-pose-selector button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.pose === pose);
     });
+
 }
 
 // Sync UI controls with current state
