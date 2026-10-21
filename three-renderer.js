@@ -121,7 +121,7 @@ Things to know before you tweak
 Don't touch sizeFactor — that scales the whole model to frame it in the canvas, not the screenshot inside the frame. Same for screenOffset, which only moves it.
 aspectRatio changes the screen's shape, not just its size. Since both Duo poses set fitScreen: true, changing it also re-does the letterboxing of your screenshot (createScreenImage()). Only use it if you want a wider/narrower display.
 cornerRadiusFactor needs no change — the radius is computed from the rendered image width, so it scales down with the screen automatically.
-Partial-unfold compensation: when unfoldPercent < 100, applyScreenSpec() widens the plane by 2 / (1 + cos θ) to offset the foreshortened hinged half. That's automatic, so tune the size at 100% unfold and it stays consistent at 75%.
+Partial unfold: the hinged half of the plane turns about the crease by the same angle as the display, so both foreshorten equally and the plane keeps its unfolded width. Tune the size at 100% unfold; partial unfold then matches automatically.
 It shrinks around its centre, which sits at screenOffset. If the display's centre isn't exactly at that offset you'll see the gap go asymmetric — nudge screenOffset.x / .y to re-centre.
 }
                  */
@@ -302,18 +302,13 @@ function createScreenGeometry(width, height, foldRadians) {
 // Resize and reposition an existing screen plane to match a screen spec.
 function applyScreenSpec(plane, spec) {
     const planeHeight = 4.3 * spec.screenHeightFactor;
-    let planeWidth = planeHeight * spec.aspectRatio;
+    const planeWidth = planeHeight * spec.aspectRatio;
     const foldRadians = spec.foldRadians || 0;
     const hingeZ = spec.hingeZ || 0;
 
-    // A folded display projects narrower on screen because the hinged half is
-    // tilted into the screen: its horizontal extent shrinks by cos(fold). Widen
-    // the plane by 2/(1+cos) so the folded screenshot still fills the full
-    // display width — and the image stretches when folded, enlarges when open.
-    if (foldRadians > 0.001) {
-        planeWidth = planeWidth * 2 / (1 + Math.cos(foldRadians));
-    }
-
+    // The plane keeps its unfolded width while folding: the hinged half turns
+    // about the crease exactly like the display behind it, so both foreshorten
+    // by the same cos(fold) and the screenshot stays inside the frame.
     const applied = plane.userData.appliedScreenSpec;
 
     if (!applied
